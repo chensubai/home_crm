@@ -18,6 +18,10 @@ class StorageSpace extends Model
         'image_hash',
     ];
 
+    protected $casts = [
+        'family_id' => 'integer',
+    ];
+
     public function nfcTags()
     {
         return $this->hasMany(NfcTag::class, 'space_id');

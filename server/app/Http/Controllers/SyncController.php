@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\AuthorizesFamilyAccess;
 use App\Models\Item;
 use App\Models\Reminder;
 use App\Models\StorageSpace;
+use App\Services\QiniuStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -13,7 +14,7 @@ class SyncController extends Controller
 {
     use AuthorizesFamilyAccess;
 
-    public function pull(Request $request)
+    public function pull(Request $request, QiniuStorage $storage)
     {
         $data = $request->validate([
             'family_id' => ['required', 'integer', 'exists:families,id'],
@@ -26,8 +27,12 @@ class SyncController extends Controller
 
         return $this->ok([
             'cursor' => now()->utc()->toJSON(),
-            'spaces' => StorageSpace::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get(),
-            'items' => Item::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get(),
+            'spaces' => StorageSpace::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
+                fn (StorageSpace $space) => $this->withImageUrl($space, $storage)
+            ),
+            'items' => Item::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
+                fn (Item $item) => $this->withImageUrl($item, $storage)
+            ),
             'reminders' => Reminder::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get(),
         ]);
     }
@@ -63,6 +68,15 @@ class SyncController extends Controller
             );
         }
 
-        return $this->pull($request);
+        return $this->pull($request, app(QiniuStorage::class));
+    }
+
+    private function withImageUrl(StorageSpace|Item $record, QiniuStorage $storage): StorageSpace|Item
+    {
+        if ($record->image_key !== null) {
+            $record->image_url = $storage->url($record->image_key);
+        }
+
+        return $record;
     }
 }

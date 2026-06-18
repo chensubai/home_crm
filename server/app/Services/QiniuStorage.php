@@ -2,10 +2,16 @@
 
 namespace App\Services;
 
+use App\Exceptions\QiniuUploadException;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Qiniu\Auth;
+use Qiniu\Config;
+use Qiniu\Region;
+use Qiniu\Storage\UploadManager;
+use Qiniu\Zone;
 use RuntimeException;
+use Throwable;
 
 class QiniuStorage
 {
@@ -14,20 +20,25 @@ class QiniuStorage
         $this->ensureConfigured();
 
         $key = $this->makeKey($file, $familyId, $directory);
-        $response = Http::attach(
-            'file',
-            file_get_contents($file->getRealPath()),
-            $file->getClientOriginalName()
-        )->post((string) config('services.qiniu.upload_url'), [
-            'token' => $this->uploadToken($key),
-            'key' => $key,
-        ]);
+        $auth = $this->auth();
+        $uploadToken = $auth->uploadToken((string) config('services.qiniu.bucket'));
+        $uploadManager = new UploadManager($this->qiniuConfig());
 
-        if (! $response->successful()) {
-            throw new RuntimeException('七牛云上传失败：'.$response->body());
+        try {
+            [$payload, $error] = $uploadManager->putFile(
+                $uploadToken,
+                $key,
+                (string) $file->getRealPath()
+            );
+        } catch (Throwable $exception) {
+            throw new QiniuUploadException(0, $exception->getMessage());
         }
 
-        $payload = $response->json();
+        if ($error !== null) {
+            throw new QiniuUploadException((int) $error->code(), (string) $error->message());
+        }
+
+        $payload ??= [];
 
         return [
             'key' => $key,
@@ -38,33 +49,25 @@ class QiniuStorage
 
     public function url(string $key): string
     {
-        $domain = rtrim((string) config('services.qiniu.domain'), '/');
-        $baseUrl = $domain.'/'.str_replace('%2F', '/', rawurlencode($key));
+        $baseUrl = $this->publicResourceUrl($key);
 
         if (! config('services.qiniu.private')) {
             return $baseUrl;
         }
 
-        $deadline = now()->addSeconds((int) config('services.qiniu.url_ttl'))->timestamp;
-        $downloadUrl = $baseUrl.(str_contains($baseUrl, '?') ? '&' : '?').'e='.$deadline;
-        $token = config('services.qiniu.access_key').':'.$this->base64UrlSafe(
-            hash_hmac('sha1', $downloadUrl, (string) config('services.qiniu.secret_key'), true)
-        );
-
-        return $downloadUrl.'&token='.$token;
+        return $this->auth()->privateDownloadUrl($baseUrl, (int) config('services.qiniu.url_ttl'));
     }
 
-    private function uploadToken(string $key): string
+    private function publicResourceUrl(string $key): string
     {
-        $policy = $this->base64UrlSafe(json_encode([
-            'scope' => config('services.qiniu.bucket').':'.$key,
-            'deadline' => now()->addHour()->timestamp,
-            'mimeLimit' => 'image/*',
-        ], JSON_UNESCAPED_SLASHES));
+        $domain = rtrim((string) config('services.qiniu.domain'), '/');
+        if (! str_starts_with($domain, 'http://') && ! str_starts_with($domain, 'https://')) {
+            $domain = 'https://'.$domain;
+        }
+        $domain = preg_replace('/^http:\/\//', 'https://', $domain);
+        $encodedKey = implode('/', array_map('rawurlencode', explode('/', ltrim($key, '/'))));
 
-        $sign = $this->base64UrlSafe(hash_hmac('sha1', $policy, (string) config('services.qiniu.secret_key'), true));
-
-        return config('services.qiniu.access_key').':'.$sign.':'.$policy;
+        return $domain.'/'.$encodedKey;
     }
 
     private function makeKey(UploadedFile $file, int $familyId, string $directory): string
@@ -90,8 +93,31 @@ class QiniuStorage
         }
     }
 
-    private function base64UrlSafe(string $value): string
+    private function auth(): Auth
     {
-        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+        return new Auth(
+            (string) config('services.qiniu.access_key'),
+            (string) config('services.qiniu.secret_key')
+        );
+    }
+
+    private function qiniuConfig(): Config
+    {
+        $config = new Config($this->zone());
+        $config->useHTTPS = true;
+
+        return $config;
+    }
+
+    private function zone(): Region
+    {
+        return match ((string) config('services.qiniu.region', 'z1')) {
+            'z0' => Zone::zonez0(),
+            'z2' => Zone::zonez2(),
+            'cn-east-2' => Zone::zoneCnEast2(),
+            'as0' => Zone::zoneAs0(),
+            'na0' => Zone::zoneNa0(),
+            default => Zone::zonez1(),
+        };
     }
 }

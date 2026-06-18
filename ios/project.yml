@@ -17,7 +17,8 @@ targets:
       properties:
         CFBundleDisplayName: 运营小家
         UILaunchScreen: {}
-        NSCameraUsageDescription: 用于扫描条形码和二维码添加物品。
+        NSCameraUsageDescription: 用于扫描条形码、二维码，以及拍摄空间和物品图片。
+        NSPhotoLibraryUsageDescription: 用于从相册选择空间和物品图片。
         NFCReaderUsageDescription: 后续用于扫描储物空间 NFC 标签。
     entitlements:
       path: OperationsHome/OperationsHome.entitlements

@@ -7,6 +7,7 @@ struct RemindersView: View {
     @ObservedObject var sync: SyncEngine
     @Query private var allReminders: [ReminderRecord]
     @State private var isAdding = false
+    @State private var message = ""
 
     private var reminders: [ReminderRecord] {
         allReminders
@@ -18,25 +19,83 @@ struct RemindersView: View {
         NavigationStack {
             List {
                 ForEach(reminders) { reminder in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(reminder.title).font(.headline)
-                        Text(reminder.remindAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(reminder.title)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(reminderSubtitle(for: reminder))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: reminder.completedAt == nil ? "bell.fill" : "bell.slash")
+                            .foregroundStyle(reminder.completedAt == nil ? .blue : .secondary)
+                            .frame(width: 32, height: 32)
                     }
+                    .padding(.vertical, 6)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            Task { await delete(reminder) }
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    }
+                }
+
+                if !message.isEmpty {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("提醒")
             .toolbar {
-                Button {
-                    isAdding = true
-                } label: {
-                    Image(systemName: "plus")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isAdding = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("新建提醒")
                 }
             }
             .sheet(isPresented: $isAdding) {
                 ReminderFormView(session: session, sync: sync)
             }
+        }
+    }
+
+    private func reminderSubtitle(for reminder: ReminderRecord) -> String {
+        let date = reminder.remindAt.formatted(date: .abbreviated, time: .shortened)
+        return "\(date) · \(repeatTitle(for: reminder.repeatRule))"
+    }
+
+    private func repeatTitle(for rule: RepeatRule) -> String {
+        switch rule {
+        case .none: "不重复"
+        case .daily: "每天"
+        case .weekly: "每周"
+        case .monthly: "每月"
+        case .yearly: "每年"
+        }
+    }
+
+    private func delete(_ reminder: ReminderRecord) async {
+        guard let token = session.token, let familyId = session.selectedFamilyId else { return }
+        let previousDeletedAt = reminder.deletedAt
+        reminder.deletedAt = .now
+        try? context.save()
+
+        do {
+            try await APIClient(token: token).deleteReminder(id: reminder.remoteId)
+            await sync.pull(familyId: familyId, token: token, context: context)
+        } catch {
+            reminder.deletedAt = previousDeletedAt
+            try? context.save()
+            message = error.localizedDescription
         }
     }
 }

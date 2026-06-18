@@ -75,15 +75,21 @@ final class SpaceRecord {
     var name: String
     var detail: String?
     var nfcUid: String?
+    var imageKey: String?
+    var imageUrl: String?
+    var imageHash: String?
     var updatedAt: Date
     var deletedAt: Date?
 
-    init(remoteId: Int, familyId: Int, name: String, detail: String? = nil, nfcUid: String? = nil, updatedAt: Date = .now, deletedAt: Date? = nil) {
+    init(remoteId: Int, familyId: Int, name: String, detail: String? = nil, nfcUid: String? = nil, imageKey: String? = nil, imageUrl: String? = nil, imageHash: String? = nil, updatedAt: Date = .now, deletedAt: Date? = nil) {
         self.remoteId = remoteId
         self.familyId = familyId
         self.name = name
         self.detail = detail
         self.nfcUid = nfcUid
+        self.imageKey = imageKey
+        self.imageUrl = imageUrl
+        self.imageHash = imageHash
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
     }
@@ -102,6 +108,9 @@ final class ItemRecord {
     var expiresAt: Date?
     var statusRaw: String
     var notes: String?
+    var imageKey: String?
+    var imageUrl: String?
+    var imageHash: String?
     var updatedAt: Date
     var deletedAt: Date?
 
@@ -110,7 +119,7 @@ final class ItemRecord {
         set { statusRaw = newValue.rawValue }
     }
 
-    init(remoteId: Int, familyId: Int, spaceId: Int?, name: String, category: String? = nil, quantity: Int, unit: String? = nil, barcode: String? = nil, expiresAt: Date? = nil, status: ItemStatus = .idle, notes: String? = nil, updatedAt: Date = .now, deletedAt: Date? = nil) {
+    init(remoteId: Int, familyId: Int, spaceId: Int?, name: String, category: String? = nil, quantity: Int, unit: String? = nil, barcode: String? = nil, expiresAt: Date? = nil, status: ItemStatus = .idle, notes: String? = nil, imageKey: String? = nil, imageUrl: String? = nil, imageHash: String? = nil, updatedAt: Date = .now, deletedAt: Date? = nil) {
         self.remoteId = remoteId
         self.familyId = familyId
         self.spaceId = spaceId
@@ -122,6 +131,9 @@ final class ItemRecord {
         self.expiresAt = expiresAt
         self.statusRaw = status.rawValue
         self.notes = notes
+        self.imageKey = imageKey
+        self.imageUrl = imageUrl
+        self.imageHash = imageHash
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
     }

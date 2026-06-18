@@ -26,6 +26,9 @@ class Item extends Model
     ];
 
     protected $casts = [
+        'family_id' => 'integer',
+        'space_id' => 'integer',
+        'quantity' => 'integer',
         'expires_at' => 'datetime',
     ];
 }

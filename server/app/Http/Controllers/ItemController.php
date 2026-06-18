@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\QiniuUploadException;
 use App\Http\Controllers\Concerns\AuthorizesFamilyAccess;
 use App\Models\Item;
 use App\Models\ItemChange;
@@ -26,7 +27,11 @@ class ItemController extends Controller
     {
         $data = $request->validate($this->rules(['family_id', 'space_id', 'name', 'quantity']));
         $this->authorizeFamily($request->user(), (int) $data['family_id']);
-        $data = $this->attachImageData($data, $storage, (int) $data['family_id']);
+        try {
+            $data = $this->attachImageData($data, $storage, (int) $data['family_id']);
+        } catch (QiniuUploadException $exception) {
+            return $this->qiniuFailed($exception);
+        }
 
         return $this->ok($this->withImageUrl(Item::create($data), $storage), 201);
     }
@@ -35,7 +40,11 @@ class ItemController extends Controller
     {
         $this->authorizeFamily($request->user(), $item->family_id);
         $data = $request->validate($this->rules([], true));
-        $data = $this->attachImageData($data, $storage, $item->family_id);
+        try {
+            $data = $this->attachImageData($data, $storage, $item->family_id);
+        } catch (QiniuUploadException $exception) {
+            return $this->qiniuFailed($exception);
+        }
         $item->update($data);
 
         return $this->ok($this->withImageUrl($item->fresh(), $storage));
@@ -116,5 +125,17 @@ class ItemController extends Controller
         }
 
         return $item;
+    }
+
+    private function qiniuFailed(QiniuUploadException $exception)
+    {
+        return $this->fail(
+            '七牛云上传失败，请检查 QINIU_ACCESS_KEY、QINIU_SECRET_KEY、QINIU_BUCKET 和 QINIU_REGION 是否匹配。',
+            502,
+            [
+                'qiniu_status' => $exception->status,
+                'qiniu_response' => $exception->responseBody,
+            ]
+        );
     }
 }

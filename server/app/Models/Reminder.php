@@ -21,6 +21,8 @@ class Reminder extends Model
     ];
 
     protected $casts = [
+        'family_id' => 'integer',
+        'assignee_id' => 'integer',
         'remind_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

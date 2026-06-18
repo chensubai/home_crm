@@ -13,4 +13,13 @@ abstract class Controller extends BaseController
             'data' => $data,
         ], $status);
     }
+
+    protected function fail(string $message, int $status = 400, mixed $data = null)
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => $message,
+            'data' => $data,
+        ], $status);
+    }
 }

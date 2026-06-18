@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct ItemsView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
@@ -29,61 +30,126 @@ struct ItemsView: View {
         NavigationStack {
             List {
                 ForEach(items) { item in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(item.name).font(.headline)
-                            Spacer()
-                            Text(quantityText(for: item))
-                                .font(.subheadline.monospacedDigit())
-                        }
-                        HStack {
-                            Text(item.category ?? "未分类")
-                            Text(item.status.title)
-                            if let expiresAt = item.expiresAt {
-                                Text(expiresAt, style: .date)
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                        if let spaceId = item.spaceId, let space = spacesById[spaceId] {
-                            Text(space.name)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Button {
-                                Task { await adjust(item, delta: -1) }
-                            } label: {
-                                Label("减少", systemImage: "minus")
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(item.quantity == 0)
-
-                            Button {
-                                Task { await adjust(item, delta: 1) }
-                            } label: {
-                                Label("增加", systemImage: "plus")
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .labelStyle(.iconOnly)
-                    }
+                    itemRow(item)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                 }
             }
             .navigationTitle(spaceFilter?.name ?? "物品")
+            .navigationBarBackButtonHidden(spaceFilter != nil)
             .toolbar {
-                Button {
-                    isAdding = true
-                } label: {
-                    Image(systemName: "plus")
+                if spaceFilter != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .accessibilityLabel("返回")
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isAdding = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("添加物品")
                 }
             }
             .sheet(isPresented: $isAdding) {
                 ItemFormView(session: session, sync: sync, initialSpaceId: spaceFilter?.remoteId)
             }
         }
+    }
+
+    private func itemRow(_ item: ItemRecord) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    if let imageUrl = item.imageUrl, let url = URL(string: imageUrl) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Color(.secondarySystemGroupedBackground)
+                                Image(systemName: "shippingbox.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Color(.secondarySystemGroupedBackground)
+                        Image(systemName: "shippingbox.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.name)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text(item.category ?? "未分类")
+                        if let expiresAt = item.expiresAt {
+                            Text("·")
+                            Text(expiresAt, style: .date)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    if let spaceId = item.spaceId, let space = spacesById[spaceId] {
+                        Text(space.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    statusBadge(item.status)
+                    Text(quantityText(for: item))
+                        .font(.subheadline.monospacedDigit().weight(.medium))
+                        .lineLimit(1)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button {
+                    Task { await adjust(item, delta: -1) }
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(.bordered)
+                .disabled(item.quantity == 0)
+                .accessibilityLabel("减少数量")
+
+                Button {
+                    Task { await adjust(item, delta: 1) }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("增加数量")
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func statusBadge(_ status: ItemStatus) -> some View {
+        Text(status.title)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .foregroundStyle(status == .expired ? .red : .secondary)
+            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
     }
 
     private func quantityText(for item: ItemRecord) -> String {
@@ -108,6 +174,9 @@ struct ItemsView: View {
             item.expiresAt = dto.expiresAt
             item.statusRaw = dto.status
             item.notes = dto.notes
+            item.imageKey = dto.imageKey
+            item.imageUrl = dto.imageUrl
+            item.imageHash = dto.imageHash
             item.updatedAt = dto.updatedAt ?? .now
             item.deletedAt = dto.deletedAt
             try? context.save()
@@ -133,6 +202,7 @@ struct ItemFormView: View {
     @State private var barcode = ""
     @State private var status = ItemStatus.idle
     @State private var showingScanner = false
+    @State private var imageData: Data?
     @State private var message = ""
     var initialSpaceId: Int?
 
@@ -174,6 +244,10 @@ struct ItemFormView: View {
                             Image(systemName: "barcode.viewfinder")
                         }
                     }
+                }
+
+                Section("物品图片") {
+                    ImageInputView(imageData: $imageData)
                 }
 
                 if !message.isEmpty {
@@ -218,7 +292,7 @@ struct ItemFormView: View {
         if !barcode.isEmpty { payload["barcode"] = .string(barcode) }
 
         do {
-            let dto = try await APIClient(token: token).createItem(payload)
+            let dto = try await APIClient(token: token).createItem(payload, imageData: imageData)
             let item = ItemRecord(
                 remoteId: dto.id,
                 familyId: dto.familyId,
@@ -231,6 +305,9 @@ struct ItemFormView: View {
                 expiresAt: dto.expiresAt,
                 status: ItemStatus(rawValue: dto.status) ?? .idle,
                 notes: dto.notes,
+                imageKey: dto.imageKey,
+                imageUrl: dto.imageUrl,
+                imageHash: dto.imageHash,
                 updatedAt: dto.updatedAt ?? .now,
                 deletedAt: dto.deletedAt
             )

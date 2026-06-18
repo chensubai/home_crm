@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Services\QiniuStorage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -112,19 +112,22 @@ class OperationsHomeApiTest extends TestCase
 
     public function test_uploads_space_and_item_images_to_qiniu(): void
     {
-        config([
-            'services.qiniu.access_key' => 'test-access-key',
-            'services.qiniu.secret_key' => 'test-secret-key',
-            'services.qiniu.bucket' => 'operations-home-test',
-            'services.qiniu.domain' => 'https://cdn.example.com',
-            'services.qiniu.upload_url' => 'https://upload.qiniup.com',
-        ]);
+        $this->app->instance(QiniuStorage::class, new class extends QiniuStorage
+        {
+            public function uploadImage(UploadedFile $file, int $familyId, string $directory = 'images'): array
+            {
+                return [
+                    'key' => "families/{$familyId}/{$directory}/fake.png",
+                    'hash' => 'qiniu-file-hash',
+                    'url' => "https://cdn.example.com/families/{$familyId}/{$directory}/fake.png",
+                ];
+            }
 
-        Http::fake([
-            'upload.qiniup.com' => Http::response([
-                'hash' => 'qiniu-file-hash',
-            ], 200),
-        ]);
+            public function url(string $key): string
+            {
+                return 'https://cdn.example.com/'.$key;
+            }
+        });
 
         [, $token] = $this->login('13800000005');
 

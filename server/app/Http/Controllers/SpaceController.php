@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\QiniuUploadException;
 use App\Http\Controllers\Concerns\AuthorizesFamilyAccess;
 use App\Models\StorageSpace;
 use App\Services\QiniuStorage;
@@ -31,7 +32,11 @@ class SpaceController extends Controller
             'image' => ['nullable', 'image', 'max:10240'],
         ]);
         $this->authorizeFamily($request->user(), (int) $data['family_id']);
-        $data = $this->attachImageData($data, $storage, (int) $data['family_id'], 'spaces');
+        try {
+            $data = $this->attachImageData($data, $storage, (int) $data['family_id'], 'spaces');
+        } catch (QiniuUploadException $exception) {
+            return $this->qiniuFailed($exception);
+        }
 
         $space = StorageSpace::create($data);
         if (! empty($data['nfc_uid'])) {
@@ -49,7 +54,11 @@ class SpaceController extends Controller
             'description' => ['nullable', 'string', 'max:500'],
             'image' => ['nullable', 'image', 'max:10240'],
         ]);
-        $data = $this->attachImageData($data, $storage, $space->family_id, 'spaces');
+        try {
+            $data = $this->attachImageData($data, $storage, $space->family_id, 'spaces');
+        } catch (QiniuUploadException $exception) {
+            return $this->qiniuFailed($exception);
+        }
         $space->update($data);
 
         return $this->ok($this->withImageUrl($space->fresh('nfcTags'), $storage));
@@ -86,5 +95,17 @@ class SpaceController extends Controller
         }
 
         return $space;
+    }
+
+    private function qiniuFailed(QiniuUploadException $exception)
+    {
+        return $this->fail(
+            '七牛云上传失败，请检查 QINIU_ACCESS_KEY、QINIU_SECRET_KEY、QINIU_BUCKET 和 QINIU_REGION 是否匹配。',
+            502,
+            [
+                'qiniu_status' => $exception->status,
+                'qiniu_response' => $exception->responseBody,
+            ]
+        );
     }
 }

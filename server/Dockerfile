@@ -15,6 +15,7 @@ WORKDIR /var/www/html
 COPY --from=vendor /app/vendor ./vendor
 COPY . .
 COPY docker/php/entrypoint.sh /usr/local/bin/operations-home-entrypoint
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
 RUN chmod +x /usr/local/bin/operations-home-entrypoint \
     && chown -R www-data:www-data storage bootstrap/cache

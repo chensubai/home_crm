@@ -28,6 +28,9 @@ struct SpaceDTO: Codable, Identifiable {
     let familyId: Int
     let name: String
     let description: String?
+    let imageKey: String?
+    let imageUrl: String?
+    let imageHash: String?
     let updatedAt: Date?
     let deletedAt: Date?
 
@@ -36,6 +39,9 @@ struct SpaceDTO: Codable, Identifiable {
         case familyId = "family_id"
         case name
         case description
+        case imageKey = "image_key"
+        case imageUrl = "image_url"
+        case imageHash = "image_hash"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
     }
@@ -53,6 +59,9 @@ struct ItemDTO: Codable, Identifiable {
     let expiresAt: Date?
     let status: String
     let notes: String?
+    let imageKey: String?
+    let imageUrl: String?
+    let imageHash: String?
     let updatedAt: Date?
     let deletedAt: Date?
 
@@ -68,6 +77,9 @@ struct ItemDTO: Codable, Identifiable {
         case expiresAt = "expires_at"
         case status
         case notes
+        case imageKey = "image_key"
+        case imageUrl = "image_url"
+        case imageHash = "image_hash"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
     }

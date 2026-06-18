@@ -44,6 +44,9 @@ final class SyncEngine: ObservableObject {
         record.familyId = dto.familyId
         record.name = dto.name
         record.detail = dto.description
+        record.imageKey = dto.imageKey
+        record.imageUrl = dto.imageUrl
+        record.imageHash = dto.imageHash
         record.updatedAt = dto.updatedAt ?? .now
         record.deletedAt = dto.deletedAt
         if record.modelContext == nil { context.insert(record) }
@@ -63,6 +66,9 @@ final class SyncEngine: ObservableObject {
         record.expiresAt = dto.expiresAt
         record.statusRaw = dto.status
         record.notes = dto.notes
+        record.imageKey = dto.imageKey
+        record.imageUrl = dto.imageUrl
+        record.imageHash = dto.imageHash
         record.updatedAt = dto.updatedAt ?? .now
         record.deletedAt = dto.deletedAt
         if record.modelContext == nil { context.insert(record) }
