@@ -26,3 +26,4 @@ server/.env
 *.sln
 *.sw?
 .derivedData
+.trae
