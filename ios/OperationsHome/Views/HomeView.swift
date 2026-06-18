@@ -10,6 +10,8 @@ struct HomeView: View {
     @State private var errorMessage = ""
     @State private var isLoadingFamilies = false
     @State private var didLoadFamilies = false
+    @State private var selectedTab: HomeTab = .spaces
+    @Namespace private var tabAnimation
 
     var body: some View {
         Group {
@@ -24,16 +26,30 @@ struct HomeView: View {
                     onRefresh: { Task { await loadFamilies() } }
                 )
             } else {
-                TabView {
-                    SpacesView(session: session, sync: sync, familyName: selectedFamilyName)
-                        .tabItem { Label("空间", systemImage: "cabinet") }
-                    RemindersView(session: session, sync: sync)
-                        .tabItem { Label("提醒", systemImage: "bell") }
-                    ProfileView(session: session)
-                        .tabItem { Label("个人中心", systemImage: "person.crop.circle") }
+                ZStack {
+                    OnboardingBackground()
+
+                    VStack(spacing: 0) {
+                        familyBar
+
+                        Group {
+                            switch selectedTab {
+                            case .spaces:
+                                SpacesView(session: session, sync: sync, familyName: selectedFamilyName)
+                            case .reminders:
+                                RemindersView(session: session, sync: sync)
+                            case .profile:
+                                ProfileView(session: session)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
-                .safeAreaInset(edge: .top) {
-                    familyBar
+                .safeAreaInset(edge: .bottom) {
+                    GlassTabBar(selection: $selectedTab, namespace: tabAnimation)
+                        .padding(.horizontal, 26)
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
                 }
             }
         }
@@ -50,22 +66,35 @@ struct HomeView: View {
 
     private var familyBar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Picker("家庭", selection: Binding(
-                    get: { session.selectedFamilyId ?? families.first?.id ?? 0 },
-                    set: { session.selectedFamilyId = $0 == 0 ? nil : $0 }
-                )) {
-                    ForEach(families) { family in
-                        Text(family.name).tag(family.id)
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("家庭空间")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Picker("家庭", selection: Binding(
+                        get: { session.selectedFamilyId ?? families.first?.id ?? 0 },
+                        set: { session.selectedFamilyId = $0 == 0 ? nil : $0 }
+                    )) {
+                        ForEach(families) { family in
+                            Text(family.name).tag(family.id)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .tint(Color(red: 0.16, green: 0.18, blue: 0.16))
                 }
-                .pickerStyle(.menu)
+
+                Spacer()
 
                 Button {
                     Task { await refresh() }
                 } label: {
                     Image(systemName: sync.isSyncing ? "arrow.triangle.2.circlepath.circle" : "arrow.triangle.2.circlepath")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                        .frame(width: 38, height: 38)
+                        .background(Color.white.opacity(0.76), in: Circle())
                 }
+                .accessibilityLabel("刷新")
             }
 
             if !errorMessage.isEmpty {
@@ -76,8 +105,16 @@ struct HomeView: View {
                 Text(lastError).font(.caption).foregroundStyle(.red)
             }
         }
-        .padding()
-        .background(.bar)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.82))
+                .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
     }
 
     private func loadFamilies() async {
@@ -119,6 +156,82 @@ struct HomeView: View {
     private func refresh() async {
         guard let token = session.token, let familyId = session.selectedFamilyId else { return }
         await sync.pull(familyId: familyId, token: token, context: context)
+    }
+}
+
+private enum HomeTab: String, CaseIterable, Identifiable {
+    case spaces
+    case reminders
+    case profile
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .spaces: "空间"
+        case .reminders: "提醒"
+        case .profile: "个人中心"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .spaces: "cabinet"
+        case .reminders: "bell"
+        case .profile: "person.crop.circle"
+        }
+    }
+}
+
+private struct GlassTabBar: View {
+    @Binding var selection: HomeTab
+    var namespace: Namespace.ID
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(HomeTab.allCases) { tab in
+                Button {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                        selection = tab
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 17, weight: .semibold))
+                        Text(tab.title)
+                            .font(.caption2.weight(.bold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(selection == tab ? Color(red: 0.20, green: 0.32, blue: 0.25) : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background {
+                        if selection == tab {
+                            Capsule(style: .continuous)
+                                .fill(Color.white.opacity(0.84))
+                                .matchedGeometryEffect(id: "selectedTab", in: namespace)
+                                .shadow(color: Color(red: 0.34, green: 0.45, blue: 0.34).opacity(0.18), radius: 14, y: 8)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+            }
+        }
+        .padding(6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.34))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.62), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.10), radius: 24, y: 12)
+        )
     }
 }
 

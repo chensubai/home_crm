@@ -16,6 +16,7 @@ class Reminder extends Model
         'kind',
         'remind_at',
         'repeat_rule',
+        'repeat_value',
         'notes',
         'completed_at',
     ];

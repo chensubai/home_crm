@@ -64,7 +64,7 @@ class SyncController extends Controller
         foreach ($data['reminders'] ?? [] as $reminder) {
             Reminder::withTrashed()->updateOrCreate(
                 ['id' => $reminder['id'] ?? null],
-                collect($reminder)->only(['family_id', 'assignee_id', 'title', 'kind', 'remind_at', 'repeat_rule', 'notes', 'completed_at', 'deleted_at', 'updated_at'])->all()
+                collect($reminder)->only(['family_id', 'assignee_id', 'title', 'kind', 'remind_at', 'repeat_rule', 'repeat_value', 'notes', 'completed_at', 'deleted_at', 'updated_at'])->all()
             );
         }
 

@@ -83,6 +83,7 @@ final class SyncEngine: ObservableObject {
         record.kindRaw = dto.kind
         record.remindAt = dto.remindAt
         record.repeatRuleRaw = dto.repeatRule
+        record.repeatValue = dto.repeatValue
         record.notes = dto.notes
         record.completedAt = dto.completedAt
         record.updatedAt = dto.updatedAt ?? .now

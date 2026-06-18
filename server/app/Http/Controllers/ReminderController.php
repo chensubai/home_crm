@@ -61,6 +61,7 @@ class ReminderController extends Controller
             'kind' => ['nullable', 'in:important_date,periodic_task,item_expiry'],
             'remind_at' => [$mark('remind_at'), 'date'],
             'repeat_rule' => ['nullable', 'in:none,daily,weekly,monthly,yearly'],
+            'repeat_value' => ['nullable', 'string', 'max:64'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

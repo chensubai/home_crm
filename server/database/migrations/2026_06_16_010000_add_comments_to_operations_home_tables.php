@@ -137,6 +137,7 @@ return new class extends Migration
             'kind' => '提醒类型：important_date=重要日期，periodic_task=周期任务，item_expiry=物品过期',
             'remind_at' => '提醒触发时间',
             'repeat_rule' => '重复规则：none/daily/weekly/monthly/yearly',
+            'repeat_value' => '重复规则附加值：weekly存星期编号逗号列表，monthly存每月日期号',
             'notes' => '提醒备注',
             'completed_at' => '完成时间',
             'created_at' => '创建时间',

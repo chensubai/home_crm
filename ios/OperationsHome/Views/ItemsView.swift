@@ -214,47 +214,72 @@ struct ItemFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("基础信息") {
-                    TextField("物品名称", text: $name)
-                    Picker("存放位置", selection: $selectedSpaceId) {
-                        ForEach(spaces) { space in
-                            Text(space.name).tag(Optional(space.remoteId))
+            ZStack {
+                OnboardingBackground()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        FormHeaderView(
+                            title: "添加物品",
+                            subtitle: "补充物品信息、位置和图片，之后就能快速查找。",
+                            systemImage: "shippingbox"
+                        )
+
+                        VStack(spacing: 12) {
+                            OnboardingTextField(title: "物品名称", placeholder: "例如：抽纸", text: $name, systemImage: "tag")
+                            GlassSection(title: "存放与状态") {
+                                Picker("存放位置", selection: $selectedSpaceId) {
+                                    ForEach(spaces) { space in
+                                        Text(space.name).tag(Optional(space.remoteId))
+                                    }
+                                }
+                                Picker("状态", selection: $status) {
+                                    ForEach(ItemStatus.allCases) { status in
+                                        Text(status.title).tag(status)
+                                    }
+                                }
+                            }
+                            OnboardingTextField(title: "分类", placeholder: "例如：日用品", text: $category, systemImage: "folder")
+                        }
+
+                        GlassSection(title: "库存") {
+                            Stepper("数量 \(quantity)", value: $quantity, in: 0...9999)
+                                .font(.headline.weight(.semibold))
+                            OnboardingTextField(title: "单位", placeholder: "例如：个、包、瓶", text: $unit, systemImage: "number")
+                        }
+
+                        GlassSection(title: "条码") {
+                            HStack(spacing: 10) {
+                                OnboardingTextField(title: "条码/二维码", placeholder: "扫码或手动输入", text: $barcode, systemImage: "barcode")
+                                Button {
+                                    showingScanner = true
+                                } label: {
+                                    Image(systemName: "barcode.viewfinder")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                                        .frame(width: 52, height: 52)
+                                }
+                                .buttonStyle(SoftSecondaryButtonStyle())
+                            }
+                        }
+
+                        GlassSection(title: "物品图片") {
+                            ImageInputView(imageData: $imageData)
+                        }
+
+                        if !message.isEmpty {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    TextField("分类", text: $category)
-                    Picker("状态", selection: $status) {
-                        ForEach(ItemStatus.allCases) { status in
-                            Text(status.title).tag(status)
-                        }
-                    }
-                }
-
-                Section("库存") {
-                    Stepper("数量 \(quantity)", value: $quantity, in: 0...9999)
-                    TextField("单位，例如：个、包、瓶", text: $unit)
-                }
-
-                Section("条码") {
-                    HStack {
-                        TextField("条码/二维码", text: $barcode)
-                        Button {
-                            showingScanner = true
-                        } label: {
-                            Image(systemName: "barcode.viewfinder")
-                        }
-                    }
-                }
-
-                Section("物品图片") {
-                    ImageInputView(imageData: $imageData)
-                }
-
-                if !message.isEmpty {
-                    Text(message).foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 34)
                 }
             }
-            .navigationTitle("添加物品")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }

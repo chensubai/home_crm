@@ -92,6 +92,7 @@ struct ReminderDTO: Codable, Identifiable {
     let kind: String
     let remindAt: Date
     let repeatRule: String
+    let repeatValue: String?
     let notes: String?
     let completedAt: Date?
     let updatedAt: Date?
@@ -104,6 +105,7 @@ struct ReminderDTO: Codable, Identifiable {
         case kind
         case remindAt = "remind_at"
         case repeatRule = "repeat_rule"
+        case repeatValue = "repeat_value"
         case notes
         case completedAt = "completed_at"
         case updatedAt = "updated_at"

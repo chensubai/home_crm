@@ -147,6 +147,7 @@ final class ReminderRecord {
     var kindRaw: String
     var remindAt: Date
     var repeatRuleRaw: String
+    var repeatValue: String?
     var notes: String?
     var completedAt: Date?
     var updatedAt: Date
@@ -162,13 +163,14 @@ final class ReminderRecord {
         set { repeatRuleRaw = newValue.rawValue }
     }
 
-    init(remoteId: Int, familyId: Int, title: String, kind: ReminderKind, remindAt: Date, repeatRule: RepeatRule = .none, notes: String? = nil, completedAt: Date? = nil, updatedAt: Date = .now, deletedAt: Date? = nil) {
+    init(remoteId: Int, familyId: Int, title: String, kind: ReminderKind, remindAt: Date, repeatRule: RepeatRule = .none, repeatValue: String? = nil, notes: String? = nil, completedAt: Date? = nil, updatedAt: Date = .now, deletedAt: Date? = nil) {
         self.remoteId = remoteId
         self.familyId = familyId
         self.title = title
         self.kindRaw = kind.rawValue
         self.remindAt = remindAt
         self.repeatRuleRaw = repeatRule.rawValue
+        self.repeatValue = repeatValue
         self.notes = notes
         self.completedAt = completedAt
         self.updatedAt = updatedAt
