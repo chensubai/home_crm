@@ -11,6 +11,8 @@ struct SpacesView: View {
     @Query private var allItems: [ItemRecord]
     @State private var searchText = ""
     @State private var isAdding = false
+    @State private var editingSpace: SpaceRecord?
+    @State private var deletingSpace: SpaceRecord?
     @State private var message = ""
 
     private let columns = [
@@ -81,15 +83,34 @@ struct SpacesView: View {
                         } else {
                             LazyVGrid(columns: columns, spacing: 14) {
                                 ForEach(visibleSpaces) { space in
-                                    NavigationLink {
-                                        ItemsView(session: session, sync: sync, spaceFilter: space)
-                                    } label: {
-                                        SpaceCardView(
-                                            space: space,
-                                            itemTypeCount: itemTypeCount(for: space)
-                                        )
+                                    ZStack(alignment: .topTrailing) {
+                                        NavigationLink {
+                                            ItemsView(session: session, sync: sync, spaceFilter: space)
+                                        } label: {
+                                            SpaceCardView(
+                                                space: space,
+                                                itemTypeCount: itemTypeCount(for: space)
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        Menu {
+                                            Button("编辑空间", systemImage: "pencil") {
+                                                editingSpace = space
+                                            }
+                                            Button("删除空间", systemImage: "trash", role: .destructive) {
+                                                deletingSpace = space
+                                            }
+                                        } label: {
+                                            Image(systemName: "ellipsis")
+                                                .font(.system(size: 15, weight: .bold))
+                                                .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                                                .frame(width: 34, height: 34)
+                                                .background(.ultraThinMaterial, in: Circle())
+                                        }
+                                        .accessibilityLabel("空间操作")
+                                        .padding(16)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -110,6 +131,24 @@ struct SpacesView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isAdding) {
                 SpaceFormView(session: session, sync: sync)
+            }
+            .sheet(item: $editingSpace) { space in
+                SpaceFormView(session: session, sync: sync, space: space)
+            }
+            .alert(
+                "删除空间",
+                isPresented: Binding(
+                    get: { deletingSpace != nil },
+                    set: { if !$0 { deletingSpace = nil } }
+                ),
+                presenting: deletingSpace
+            ) { space in
+                Button("删除", role: .destructive) {
+                    Task { await delete(space) }
+                }
+                Button("取消", role: .cancel) {}
+            } message: { _ in
+                Text("删除后无法恢复。空间内有物品时，需要先移动或删除物品。")
             }
         }
     }
@@ -132,6 +171,21 @@ struct SpacesView: View {
                 && $0.deletedAt == nil
                 && $0.spaceId == space.remoteId
         }.count
+    }
+
+    private func delete(_ space: SpaceRecord) async {
+        guard let token = session.token, let familyId = session.selectedFamilyId else { return }
+        defer { deletingSpace = nil }
+
+        do {
+            try await APIClient(token: token).deleteSpace(id: space.remoteId)
+            space.deletedAt = .now
+            try context.save()
+            await sync.pull(familyId: familyId, token: token, context: context)
+            message = ""
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }
 
@@ -346,11 +400,21 @@ private struct SpaceFormView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
-    @State private var name = ""
-    @State private var detail = ""
-    @State private var nfcUid = ""
+    var space: SpaceRecord?
+    @State private var name: String
+    @State private var detail: String
+    @State private var nfcUid: String
     @State private var imageData: Data?
     @State private var message = ""
+
+    init(session: SessionStore, sync: SyncEngine, space: SpaceRecord? = nil) {
+        self._session = ObservedObject(wrappedValue: session)
+        self._sync = ObservedObject(wrappedValue: sync)
+        self.space = space
+        self._name = State(initialValue: space?.name ?? "")
+        self._detail = State(initialValue: space?.detail ?? "")
+        self._nfcUid = State(initialValue: space?.nfcUid ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -360,8 +424,8 @@ private struct SpaceFormView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         FormHeaderView(
-                            title: "添加空间",
-                            subtitle: "记录柜子、抽屉或收纳箱，让物品有清楚的位置。",
+                            title: space == nil ? "添加空间" : "编辑空间",
+                            subtitle: space == nil ? "记录柜子、抽屉或收纳箱，让物品有清楚的位置。" : "修改空间名称、位置、NFC 标签或封面。",
                             systemImage: "cabinet"
                         )
 
@@ -372,7 +436,7 @@ private struct SpaceFormView: View {
                         }
 
                         GlassSection(title: "空间图片") {
-                            ImageInputView(imageData: $imageData)
+                            ImageInputView(imageData: $imageData, existingImageURL: existingImageURL)
                         }
 
                         if !message.isEmpty {
@@ -393,38 +457,74 @@ private struct SpaceFormView: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await addSpace() } }
-                        .disabled(name.isEmpty || session.selectedFamilyId == nil)
+                    Button("保存") { Task { await save() } }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
                 }
             }
         }
     }
 
-    private func addSpace() async {
+    private var existingImageURL: URL? {
+        guard let value = space?.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return URL(string: value)
+    }
+
+    private func save() async {
         guard let token = session.token, let familyId = session.selectedFamilyId else { return }
         do {
-            let dto = try await APIClient(token: token).createSpace(
-                familyId: familyId,
-                name: name,
-                description: detail.isEmpty ? nil : detail,
-                nfcUid: nfcUid.isEmpty ? nil : nfcUid,
-                imageData: imageData
-            )
-            context.insert(SpaceRecord(
-                remoteId: dto.id,
-                familyId: dto.familyId,
-                name: dto.name,
-                detail: dto.description,
-                nfcUid: nfcUid.isEmpty ? nil : nfcUid,
-                imageKey: dto.imageKey,
-                imageUrl: dto.imageUrl,
-                imageHash: dto.imageHash
-            ))
-            try? context.save()
+            let client = APIClient(token: token)
+            if let space {
+                let dto = try await client.updateSpace(
+                    id: space.remoteId,
+                    name: name,
+                    description: detail.isEmpty ? nil : detail,
+                    nfcUid: nfcUid.isEmpty ? nil : nfcUid,
+                    imageData: imageData
+                )
+                apply(dto, to: space)
+            } else {
+                let dto = try await client.createSpace(
+                    familyId: familyId,
+                    name: name,
+                    description: detail.isEmpty ? nil : detail,
+                    nfcUid: nfcUid.isEmpty ? nil : nfcUid,
+                    imageData: imageData
+                )
+                context.insert(makeSpace(from: dto))
+            }
+            try context.save()
             await sync.pull(familyId: familyId, token: token, context: context)
             dismiss()
         } catch {
             message = error.localizedDescription
         }
     }
+}
+
+private func makeSpace(from dto: SpaceDTO) -> SpaceRecord {
+    SpaceRecord(
+        remoteId: dto.id,
+        familyId: dto.familyId,
+        name: dto.name,
+        detail: dto.description,
+        nfcUid: dto.nfcUid,
+        imageKey: dto.imageKey,
+        imageUrl: dto.imageUrl,
+        imageHash: dto.imageHash,
+        updatedAt: dto.updatedAt ?? .now,
+        deletedAt: dto.deletedAt
+    )
+}
+
+private func apply(_ dto: SpaceDTO, to space: SpaceRecord) {
+    space.familyId = dto.familyId
+    space.name = dto.name
+    space.detail = dto.description
+    space.nfcUid = dto.nfcUid
+    space.imageKey = dto.imageKey
+    space.imageUrl = dto.imageUrl
+    space.imageHash = dto.imageHash
+    space.updatedAt = dto.updatedAt ?? .now
+    space.deletedAt = dto.deletedAt
 }

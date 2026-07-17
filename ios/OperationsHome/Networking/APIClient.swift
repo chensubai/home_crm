@@ -491,7 +491,7 @@ enum EncodableValue: Encodable {
         case .string(let value): value
         case .date(let value): ISO8601DateFormatter().string(from: value)
         case .bool(let value): value ? "1" : "0"
-        case .null: nil
+        case .null: ""
         }
     }
 }

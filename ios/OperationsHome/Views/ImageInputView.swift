@@ -5,6 +5,7 @@ import UIKit
 struct ImageInputView: View {
     private let maxUploadBytes = 5 * 1024 * 1024
     @Binding var imageData: Data?
+    var existingImageURL: URL? = nil
     @State private var selectedItem: PhotosPickerItem?
     @State private var showingCamera = false
 
@@ -59,20 +60,44 @@ struct ImageInputView: View {
                 .frame(height: 160)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-        } else {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .frame(height: 132)
-                .overlay {
-                    VStack(spacing: 8) {
-                        Image(systemName: "photo.badge.plus")
-                            .font(.system(size: 30, weight: .semibold))
-                        Text("添加图片")
-                            .font(.subheadline)
-                    }
-                    .foregroundStyle(.secondary)
+        } else if let existingImageURL {
+            AsyncImage(url: existingImageURL) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 160)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .failure:
+                    placeholder
+                @unknown default:
+                    placeholder
                 }
+            }
+        } else {
+            placeholder
         }
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color(.secondarySystemGroupedBackground))
+            .frame(height: 132)
+            .overlay {
+                VStack(spacing: 8) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 30, weight: .semibold))
+                    Text("添加图片")
+                        .font(.subheadline)
+                }
+                .foregroundStyle(.secondary)
+            }
     }
 
     private func compressedImageData(from data: Data) -> Data {
