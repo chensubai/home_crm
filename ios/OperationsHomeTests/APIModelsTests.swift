@@ -24,4 +24,47 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(space.nfcUid, "nfc-updated")
         XCTAssertFalse(reminder.isEnabled)
     }
+
+    func testLegacyRepeatingReminderOpensAsPeriodicTask() {
+        XCTAssertEqual(
+            normalizedReminderKind(storedKind: .importantDate, repeatRule: .weekly),
+            .periodicTask
+        )
+    }
+
+    func testSpaceUpdatePayloadSendsNullForClearedOptionalFields() throws {
+        let payload = spaceUpdatePayload(name: "客厅柜子", description: nil, nfcUid: nil)
+        let data = try JSONEncoder().encode(payload)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["name"] as? String, "客厅柜子")
+        XCTAssertTrue(object.keys.contains("description"))
+        XCTAssertTrue(object["description"] is NSNull)
+        XCTAssertTrue(object.keys.contains("nfc_uid"))
+        XCTAssertTrue(object["nfc_uid"] is NSNull)
+    }
+
+    func testItemAdjustmentGateSerializesRequestsForTheSameItem() {
+        var gate = ItemAdjustmentGate()
+
+        XCTAssertTrue(gate.begin(itemId: 11))
+        XCTAssertFalse(gate.begin(itemId: 11))
+        XCTAssertTrue(gate.begin(itemId: 12))
+        XCTAssertTrue(gate.isAdjusting(itemId: 11))
+
+        gate.end(itemId: 11)
+
+        XCTAssertTrue(gate.begin(itemId: 11))
+    }
+
+    func testFailedFamilyLoadDoesNotOfferFamilyCreation() {
+        XCTAssertEqual(
+            homeFamilyPhase(isLoading: false, didLoadSuccessfully: false, familyCount: 0),
+            .failed
+        )
+        XCTAssertEqual(
+            homeFamilyPhase(isLoading: false, didLoadSuccessfully: true, familyCount: 0),
+            .create
+        )
+    }
 }

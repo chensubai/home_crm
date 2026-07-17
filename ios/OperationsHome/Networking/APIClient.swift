@@ -174,7 +174,7 @@ struct APIClient {
         return try await request(
             "spaces/\(id)",
             method: "PATCH",
-            body: SpaceUpdateRequest(name: name, description: description, nfcUid: nfcUid)
+            body: spaceUpdatePayload(name: name, description: description, nfcUid: nfcUid)
         )
     }
 
@@ -450,18 +450,6 @@ private struct SpaceCreateRequest: Encodable {
     }
 }
 
-private struct SpaceUpdateRequest: Encodable {
-    let name: String
-    let description: String?
-    let nfcUid: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case description
-        case nfcUid = "nfc_uid"
-    }
-}
-
 private struct ItemAdjustRequest: Encodable {
     let delta: Int
     let reason: String?
@@ -494,4 +482,12 @@ enum EncodableValue: Encodable {
         case .null: ""
         }
     }
+}
+
+func spaceUpdatePayload(name: String, description: String?, nfcUid: String?) -> [String: EncodableValue] {
+    [
+        "name": .string(name),
+        "description": description.map(EncodableValue.string) ?? .null,
+        "nfc_uid": nfcUid.map(EncodableValue.string) ?? .null
+    ]
 }

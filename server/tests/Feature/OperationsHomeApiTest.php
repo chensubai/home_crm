@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Services\QiniuStorage;
+use App\Models\Family;
+use App\Models\NfcTag;
 use App\Models\User;
+use App\Services\QiniuStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
@@ -215,7 +217,7 @@ class OperationsHomeApiTest extends TestCase
             ->assertJsonPath('data.role', 'owner')
             ->json('data.id');
 
-        $membership = \App\Models\Family::findOrFail($familyId)->members()->create([
+        $membership = Family::findOrFail($familyId)->members()->create([
             'user_id' => $member->id,
             'role' => 'member',
         ]);
@@ -361,7 +363,7 @@ class OperationsHomeApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.nfc_uid', 'target-final');
 
-        $this->assertSame(1, \App\Models\NfcTag::query()
+        $this->assertSame(1, NfcTag::query()
             ->where('space_id', $targetSpaceId)
             ->count());
     }
@@ -392,6 +394,172 @@ class OperationsHomeApiTest extends TestCase
         $this->withToken($token)->getJson("/api/sync?family_id={$familyId}")
             ->assertOk()
             ->assertJsonPath('data.reminders.0.is_enabled', false);
+    }
+
+    public function test_sync_push_cannot_modify_another_familys_records(): void
+    {
+        [, $attackerToken] = $this->login('13800000030');
+        [, $ownerToken] = $this->login('13800000031');
+
+        $attackerFamilyId = $this->withToken($attackerToken)
+            ->postJson('/api/families', ['name' => '攻击者家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $targetFamilyId = $this->withToken($ownerToken)
+            ->postJson('/api/families', ['name' => '目标家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $targetSpaceId = $this->withToken($ownerToken)
+            ->postJson('/api/spaces', ['family_id' => $targetFamilyId, 'name' => '目标空间'])
+            ->assertCreated()
+            ->json('data.id');
+        $targetItemId = $this->withToken($ownerToken)
+            ->postJson('/api/items', [
+                'family_id' => $targetFamilyId,
+                'space_id' => $targetSpaceId,
+                'name' => '目标物品',
+                'quantity' => 1,
+            ])->assertCreated()->json('data.id');
+        $targetReminderId = $this->withToken($ownerToken)
+            ->postJson('/api/reminders', [
+                'family_id' => $targetFamilyId,
+                'title' => '目标提醒',
+                'remind_at' => now()->addDay()->toIso8601String(),
+            ])->assertCreated()->json('data.id');
+
+        foreach ([
+            ['spaces' => [[
+                'id' => $targetSpaceId,
+                'family_id' => $targetFamilyId,
+                'name' => '越权空间',
+            ]]],
+            ['items' => [[
+                'id' => $targetItemId,
+                'family_id' => $targetFamilyId,
+                'space_id' => $targetSpaceId,
+                'name' => '越权物品',
+                'quantity' => 99,
+            ]]],
+            ['reminders' => [[
+                'id' => $targetReminderId,
+                'family_id' => $targetFamilyId,
+                'title' => '越权提醒',
+                'remind_at' => now()->addWeek()->toIso8601String(),
+            ]]],
+        ] as $payload) {
+            $this->withToken($attackerToken)
+                ->postJson('/api/sync/push', ['family_id' => $attackerFamilyId] + $payload)
+                ->assertStatus(422);
+        }
+
+        $this->assertDatabaseHas('storage_spaces', ['id' => $targetSpaceId, 'name' => '目标空间']);
+        $this->assertDatabaseHas('items', ['id' => $targetItemId, 'name' => '目标物品', 'quantity' => 1]);
+        $this->assertDatabaseHas('reminders', ['id' => $targetReminderId, 'title' => '目标提醒']);
+    }
+
+    public function test_sync_push_updates_and_creates_records_in_the_authorized_family(): void
+    {
+        [, $token] = $this->login('13800000032');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '同步家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '同步前空间'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)->postJson('/api/sync/push', [
+            'family_id' => $familyId,
+            'spaces' => [[
+                'id' => $spaceId,
+                'family_id' => $familyId + 1000,
+                'name' => '同步后空间',
+            ]],
+            'items' => [[
+                'family_id' => $familyId + 1000,
+                'space_id' => $spaceId,
+                'name' => '同步物品',
+                'quantity' => 3,
+            ]],
+            'reminders' => [[
+                'family_id' => $familyId + 1000,
+                'title' => '同步提醒',
+                'remind_at' => now()->addDay()->toIso8601String(),
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('storage_spaces', [
+            'id' => $spaceId,
+            'family_id' => $familyId,
+            'name' => '同步后空间',
+        ]);
+        $this->assertDatabaseHas('items', [
+            'family_id' => $familyId,
+            'space_id' => $spaceId,
+            'name' => '同步物品',
+            'quantity' => 3,
+        ]);
+        $this->assertDatabaseHas('reminders', [
+            'family_id' => $familyId,
+            'title' => '同步提醒',
+        ]);
+    }
+
+    public function test_sync_push_rolls_back_the_batch_when_a_later_record_is_invalid(): void
+    {
+        [, $token] = $this->login('13800000033');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '事务家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '原空间名'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)->postJson('/api/sync/push', [
+            'family_id' => $familyId,
+            'spaces' => [[
+                'id' => $spaceId,
+                'name' => '不应保留的空间名',
+            ]],
+            'items' => [[
+                'space_id' => 999999,
+                'name' => '无效物品',
+                'quantity' => 1,
+            ]],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseHas('storage_spaces', [
+            'id' => $spaceId,
+            'name' => '原空间名',
+        ]);
+    }
+
+    public function test_sync_push_requires_a_space_for_new_items(): void
+    {
+        [, $token] = $this->login('13800000034');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '必填空间家庭'])
+            ->assertCreated()
+            ->json('data.id');
+
+        foreach ([[], ['space_id' => null]] as $spacePayload) {
+            $this->withToken($token)->postJson('/api/sync/push', [
+                'family_id' => $familyId,
+                'items' => [[
+                    'name' => '无空间物品',
+                    'quantity' => 1,
+                ] + $spacePayload],
+            ])->assertStatus(422)
+                ->assertJsonValidationErrors('items.0.space_id');
+        }
+
+        $this->assertDatabaseMissing('items', [
+            'family_id' => $familyId,
+            'name' => '无空间物品',
+        ]);
     }
 
     private function login(string $phone): array

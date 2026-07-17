@@ -1,6 +1,20 @@
 import SwiftData
 import SwiftUI
 
+enum HomeFamilyPhase: Equatable {
+    case loading
+    case failed
+    case create
+    case content
+}
+
+func homeFamilyPhase(isLoading: Bool, didLoadSuccessfully: Bool, familyCount: Int) -> HomeFamilyPhase {
+    if didLoadSuccessfully {
+        return familyCount == 0 ? .create : .content
+    }
+    return isLoading ? .loading : .failed
+}
+
 struct HomeView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
@@ -8,16 +22,27 @@ struct HomeView: View {
     @State private var families: [FamilyDTO] = []
     @State private var newFamilyName = ""
     @State private var errorMessage = ""
-    @State private var isLoadingFamilies = false
-    @State private var didLoadFamilies = false
+    @State private var isLoadingFamilies = true
+    @State private var didLoadFamiliesSuccessfully = false
     @State private var selectedTab: HomeTab = .spaces
     @Namespace private var tabAnimation
 
     var body: some View {
         Group {
-            if isLoadingFamilies && !didLoadFamilies {
+            switch homeFamilyPhase(
+                isLoading: isLoadingFamilies,
+                didLoadSuccessfully: didLoadFamiliesSuccessfully,
+                familyCount: families.count
+            ) {
+            case .loading:
                 LoadingFamiliesView()
-            } else if didLoadFamilies && families.isEmpty {
+            case .failed:
+                FamilyLoadFailureView(
+                    message: errorMessage,
+                    onRetry: { Task { await loadFamilies() } },
+                    onLogout: { session.token = nil }
+                )
+            case .create:
                 CreateFamilyView(
                     familyName: $newFamilyName,
                     message: errorMessage,
@@ -25,7 +50,7 @@ struct HomeView: View {
                     onCreate: { Task { await createFamily() } },
                     onRefresh: { Task { await loadFamilies() } }
                 )
-            } else {
+            case .content:
                 ZStack {
                     OnboardingBackground()
 
@@ -127,15 +152,17 @@ struct HomeView: View {
     }
 
     private func loadFamilies() async {
-        guard let token = session.token else { return }
-        isLoadingFamilies = true
-        defer {
+        guard let token = session.token else {
             isLoadingFamilies = false
-            didLoadFamilies = true
+            errorMessage = "登录状态已失效，请重新登录"
+            return
         }
+        isLoadingFamilies = true
+        defer { isLoadingFamilies = false }
 
         do {
             families = try await APIClient(token: token).families()
+            didLoadFamiliesSuccessfully = true
             if let selectedFamilyId = session.selectedFamilyId,
                !families.contains(where: { $0.id == selectedFamilyId }) {
                 session.selectedFamilyId = families.first?.id
@@ -255,6 +282,43 @@ private struct LoadingFamiliesView: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+private struct FamilyLoadFailureView: View {
+    var message: String
+    var onRetry: () -> Void
+    var onLogout: () -> Void
+
+    var body: some View {
+        ZStack {
+            OnboardingBackground()
+            VStack(spacing: 18) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 36, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.32, green: 0.45, blue: 0.36))
+                Text("家庭信息加载失败")
+                    .font(.title3.bold())
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button {
+                    onRetry()
+                } label: {
+                    Label("重新加载", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                }
+                .buttonStyle(PrimaryOnboardingButtonStyle())
+                .frame(maxWidth: 260)
+
+                Button("重新登录", action: onLogout)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(28)
         }
     }
 }

@@ -1,6 +1,22 @@
 import SwiftData
 import SwiftUI
 
+struct ItemAdjustmentGate {
+    private var itemIds: Set<Int> = []
+
+    mutating func begin(itemId: Int) -> Bool {
+        itemIds.insert(itemId).inserted
+    }
+
+    mutating func end(itemId: Int) {
+        itemIds.remove(itemId)
+    }
+
+    func isAdjusting(itemId: Int) -> Bool {
+        itemIds.contains(itemId)
+    }
+}
+
 struct ItemsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -11,6 +27,7 @@ struct ItemsView: View {
     @State private var isAdding = false
     @State private var editingItem: ItemRecord?
     @State private var deletingItem: ItemRecord?
+    @State private var adjustmentGate = ItemAdjustmentGate()
     @State private var message = ""
     var spaceFilter: SpaceRecord?
 
@@ -141,20 +158,21 @@ struct ItemsView: View {
             HStack {
                 Spacer()
                 Button {
-                    Task { await adjust(item, delta: -1) }
+                    startAdjustment(item, delta: -1)
                 } label: {
                     Image(systemName: "minus")
                 }
                 .buttonStyle(.bordered)
-                .disabled(item.quantity == 0)
+                .disabled(item.quantity == 0 || adjustmentGate.isAdjusting(itemId: item.remoteId))
                 .accessibilityLabel("减少数量")
 
                 Button {
-                    Task { await adjust(item, delta: 1) }
+                    startAdjustment(item, delta: 1)
                 } label: {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.bordered)
+                .disabled(adjustmentGate.isAdjusting(itemId: item.remoteId))
                 .accessibilityLabel("增加数量")
             }
         }
@@ -198,7 +216,13 @@ struct ItemsView: View {
         return unit.isEmpty ? "数量 \(item.quantity)" : "数量 \(item.quantity) \(unit)"
     }
 
+    private func startAdjustment(_ item: ItemRecord, delta: Int) {
+        guard adjustmentGate.begin(itemId: item.remoteId) else { return }
+        Task { await adjust(item, delta: delta) }
+    }
+
     private func adjust(_ item: ItemRecord, delta: Int) async {
+        defer { adjustmentGate.end(itemId: item.remoteId) }
         guard let token = session.token, let familyId = session.selectedFamilyId else { return }
         let previousQuantity = item.quantity
         item.quantity = max(0, previousQuantity + delta)

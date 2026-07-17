@@ -257,7 +257,10 @@ struct ReminderFormView: View {
         self._sync = ObservedObject(wrappedValue: sync)
         self.reminder = reminder
 
-        let initialKind = reminder?.kind ?? .importantDate
+        let initialKind = normalizedReminderKind(
+            storedKind: reminder?.kind ?? .importantDate,
+            repeatRule: reminder?.repeatRule ?? .none
+        )
         let storedRule = reminder?.repeatRule ?? .none
         let initialRule: RepeatRule
         if initialKind == .periodicTask {
@@ -493,6 +496,10 @@ struct ReminderFormView: View {
         next.minute = minute
         return calendar.date(from: next) ?? now
     }
+}
+
+func normalizedReminderKind(storedKind: ReminderKind, repeatRule: RepeatRule) -> ReminderKind {
+    [.daily, .weekly, .monthly].contains(repeatRule) ? .periodicTask : storedKind
 }
 
 private func makeReminder(from dto: ReminderDTO) -> ReminderRecord {
