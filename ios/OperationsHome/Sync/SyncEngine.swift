@@ -44,6 +44,7 @@ final class SyncEngine: ObservableObject {
         record.familyId = dto.familyId
         record.name = dto.name
         record.detail = dto.description
+        record.nfcUid = dto.nfcUid
         record.imageKey = dto.imageKey
         record.imageUrl = dto.imageUrl
         record.imageHash = dto.imageHash
@@ -85,6 +86,7 @@ final class SyncEngine: ObservableObject {
         record.repeatRuleRaw = dto.repeatRule
         record.repeatValue = dto.repeatValue
         record.notes = dto.notes
+        record.isEnabled = dto.isEnabled
         record.completedAt = dto.completedAt
         record.updatedAt = dto.updatedAt ?? .now
         record.deletedAt = dto.deletedAt

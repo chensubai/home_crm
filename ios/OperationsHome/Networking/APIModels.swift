@@ -16,11 +16,58 @@ struct UserDTO: Codable, Identifiable {
     let id: Int
     let phone: String
     let name: String
+    let avatarKey: String?
+    let avatarUrl: String?
+    let avatarHash: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case phone
+        case name
+        case avatarKey = "avatar_key"
+        case avatarUrl = "avatar_url"
+        case avatarHash = "avatar_hash"
+    }
 }
 
 struct FamilyDTO: Codable, Identifiable {
     let id: Int
     let name: String
+    let role: String
+}
+
+struct FamilyMemberDTO: Codable, Identifiable {
+    let id: Int
+    let familyId: Int
+    let userId: Int
+    let name: String
+    let phone: String
+    let role: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case familyId = "family_id"
+        case userId = "user_id"
+        case name
+        case phone
+        case role
+    }
+}
+
+struct FamilyInviteDTO: Codable, Identifiable {
+    let id: Int
+    let familyId: Int
+    let code: String
+    let phone: String?
+    let expiresAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case familyId = "family_id"
+        case code
+        case phone
+        case expiresAt = "expires_at"
+    }
 }
 
 struct SpaceDTO: Codable, Identifiable {
@@ -28,6 +75,7 @@ struct SpaceDTO: Codable, Identifiable {
     let familyId: Int
     let name: String
     let description: String?
+    let nfcUid: String?
     let imageKey: String?
     let imageUrl: String?
     let imageHash: String?
@@ -39,6 +87,7 @@ struct SpaceDTO: Codable, Identifiable {
         case familyId = "family_id"
         case name
         case description
+        case nfcUid = "nfc_uid"
         case imageKey = "image_key"
         case imageUrl = "image_url"
         case imageHash = "image_hash"
@@ -94,6 +143,7 @@ struct ReminderDTO: Codable, Identifiable {
     let repeatRule: String
     let repeatValue: String?
     let notes: String?
+    let isEnabled: Bool
     let completedAt: Date?
     let updatedAt: Date?
     let deletedAt: Date?
@@ -107,6 +157,7 @@ struct ReminderDTO: Codable, Identifiable {
         case repeatRule = "repeat_rule"
         case repeatValue = "repeat_value"
         case notes
+        case isEnabled = "is_enabled"
         case completedAt = "completed_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"

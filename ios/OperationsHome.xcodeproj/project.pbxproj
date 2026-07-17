@@ -12,6 +12,7 @@
 		338DBD4F4C4237E3A07ADEB2 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133AA6915CF33501FE55C529 /* APIModels.swift */; };
 		3EB4DD75382FF083EA7D8D0D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40F3AA8A5140882CF4E4713 /* LoginView.swift */; };
 		48D062E52FF6B6ABA80A0530 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1A95FCDFB64628913F0150 /* ContentView.swift */; };
+		491EE101F7DF0E3604101758 /* APIModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC6932D8BDBD96BEE41005A /* APIModelsTests.swift */; };
 		4F43313AF590E27614BCA298 /* ItemsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FD97768DE6ED6080A288C9 /* ItemsView.swift */; };
 		80C4808C218464FAAE5B4E8F /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF3FCFF5C7B14B04870AB7D /* ProfileView.swift */; };
 		9965858B6B764EC41F6B5D91 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6565E89A5D854A2101AD392 /* BarcodeScannerView.swift */; };
@@ -22,16 +23,30 @@
 		C34F1F3981EE0433A0349F80 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B31E030736CAE50978FED12 /* APIClient.swift */; };
 		CA146FEE6ADE6CFD757F94F1 /* LocalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 749C7D8638650C96823021B9 /* LocalModels.swift */; };
 		ED10F0CE9699A5F2B623E5CB /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98EA055C6882DB3050AD774B /* SyncEngine.swift */; };
+		EECDA61AF0D9DA65F0D46B36 /* SessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DA2B1FC1D46221D6971C235 /* SessionStoreTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C85CD1E0A86644EFD704DB46 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 20E741CFFD7DEFAE5837B51E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C9665D1AB2DDE97F38B327D0;
+			remoteInfo = OperationsHome;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		133AA6915CF33501FE55C529 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		2DC6932D8BDBD96BEE41005A /* APIModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModelsTests.swift; sourceTree = "<group>"; };
 		44D016453AE1D17DD4159BEB /* OperationsHomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsHomeApp.swift; sourceTree = "<group>"; };
 		4633EEB02530A79EBB168A77 /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
+		4DA2B1FC1D46221D6971C235 /* SessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStoreTests.swift; sourceTree = "<group>"; };
 		539F0C466E38E29633BFC30F /* SpacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesView.swift; sourceTree = "<group>"; };
 		5744803AEA8157447FDD8FCA /* OperationsHome.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OperationsHome.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		749C7D8638650C96823021B9 /* LocalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModels.swift; sourceTree = "<group>"; };
 		784431E7E4DFAFC7085A8248 /* ImageInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageInputView.swift; sourceTree = "<group>"; };
+		82939938F739C16E17822BEF /* OperationsHomeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OperationsHomeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8E1A95FCDFB64628913F0150 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		98EA055C6882DB3050AD774B /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
 		9B31E030736CAE50978FED12 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -46,6 +61,15 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		06DF851590469919881960BA /* OperationsHomeTests */ = {
+			isa = PBXGroup;
+			children = (
+				2DC6932D8BDBD96BEE41005A /* APIModelsTests.swift */,
+				4DA2B1FC1D46221D6971C235 /* SessionStoreTests.swift */,
+			);
+			path = OperationsHomeTests;
+			sourceTree = "<group>";
+		};
 		6907337B005A1D28864F0C82 /* OperationsHome */ = {
 			isa = PBXGroup;
 			children = (
@@ -81,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				5744803AEA8157447FDD8FCA /* OperationsHome.app */,
+				82939938F739C16E17822BEF /* OperationsHomeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -113,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				6907337B005A1D28864F0C82 /* OperationsHome */,
+				06DF851590469919881960BA /* OperationsHomeTests */,
 				9CF5879071B33BBBB0E988A4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -129,6 +155,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		68C7E7DDE57ADC6ED312AC8D /* OperationsHomeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 12F9069A92961B1B574CF648 /* Build configuration list for PBXNativeTarget "OperationsHomeTests" */;
+			buildPhases = (
+				7CD159E04C4757FA1892536D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				47CAE223D36FC61F34FF6F20 /* PBXTargetDependency */,
+			);
+			name = OperationsHomeTests;
+			packageProductDependencies = (
+			);
+			productName = OperationsHomeTests;
+			productReference = 82939938F739C16E17822BEF /* OperationsHomeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		C9665D1AB2DDE97F38B327D0 /* OperationsHome */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 271F62DB30932D81C38BB87F /* Build configuration list for PBXNativeTarget "OperationsHome" */;
@@ -172,11 +216,21 @@
 			projectRoot = "";
 			targets = (
 				C9665D1AB2DDE97F38B327D0 /* OperationsHome */,
+				68C7E7DDE57ADC6ED312AC8D /* OperationsHomeTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		7CD159E04C4757FA1892536D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				491EE101F7DF0E3604101758 /* APIModelsTests.swift in Sources */,
+				EECDA61AF0D9DA65F0D46B36 /* SessionStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A0AA0BA2E8720015AE9D29AC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -200,6 +254,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		47CAE223D36FC61F34FF6F20 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C9665D1AB2DDE97F38B327D0 /* OperationsHome */;
+			targetProxy = C85CD1E0A86644EFD704DB46 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		41EBA0720D4CDE6CC73F0CE9 /* Release */ = {
@@ -257,6 +319,22 @@
 				SWIFT_VERSION = 5.10;
 			};
 			name = Release;
+		};
+		5EDA303E2B655E7156164F1B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.operationshome.OperationsHomeTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OperationsHome.app/OperationsHome";
+			};
+			name = Debug;
 		};
 		6A028F0C5CBD65EE31216BD2 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -338,6 +416,22 @@
 			};
 			name = Debug;
 		};
+		D227CF44798578960D118B72 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.operationshome.OperationsHomeTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OperationsHome.app/OperationsHome";
+			};
+			name = Release;
+		};
 		E76117C1576E13341554A7FC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -358,6 +452,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		12F9069A92961B1B574CF648 /* Build configuration list for PBXNativeTarget "OperationsHomeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5EDA303E2B655E7156164F1B /* Debug */,
+				D227CF44798578960D118B72 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		271F62DB30932D81C38BB87F /* Build configuration list for PBXNativeTarget "OperationsHome" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

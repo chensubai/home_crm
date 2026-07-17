@@ -22,3 +22,10 @@ targets:
         NFCReaderUsageDescription: 后续用于扫描储物空间 NFC 标签。
     entitlements:
       path: OperationsHome/OperationsHome.entitlements
+  OperationsHomeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - OperationsHomeTests
+    dependencies:
+      - target: OperationsHome

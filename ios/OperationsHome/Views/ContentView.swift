@@ -17,5 +17,8 @@ struct ContentView: View {
         .task {
             await NotificationScheduler().requestAuthorization()
         }
+        .task(id: session.token) {
+            await session.refreshUser()
+        }
     }
 }

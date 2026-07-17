@@ -2,18 +2,56 @@ import Foundation
 
 @MainActor
 final class SessionStore: ObservableObject {
+    private let defaults: UserDefaults
+
     @Published var token: String? {
-        didSet { UserDefaults.standard.set(token, forKey: "apiToken") }
+        didSet {
+            if let token {
+                defaults.set(token, forKey: "apiToken")
+            } else {
+                defaults.removeObject(forKey: "apiToken")
+                user = nil
+                selectedFamilyId = nil
+            }
+        }
     }
-    @Published var user: UserDTO?
+    @Published var user: UserDTO? {
+        didSet {
+            if let user, let data = try? JSONEncoder().encode(user) {
+                defaults.set(data, forKey: "currentUser")
+            } else {
+                defaults.removeObject(forKey: "currentUser")
+            }
+        }
+    }
     @Published var selectedFamilyId: Int? {
-        didSet { UserDefaults.standard.set(selectedFamilyId, forKey: "selectedFamilyId") }
+        didSet {
+            if let selectedFamilyId {
+                defaults.set(selectedFamilyId, forKey: "selectedFamilyId")
+            } else {
+                defaults.removeObject(forKey: "selectedFamilyId")
+            }
+        }
     }
 
-    init() {
-        token = UserDefaults.standard.string(forKey: "apiToken")
-        let familyId = UserDefaults.standard.integer(forKey: "selectedFamilyId")
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        token = defaults.string(forKey: "apiToken")
+        let familyId = defaults.integer(forKey: "selectedFamilyId")
         selectedFamilyId = familyId == 0 ? nil : familyId
+        if token != nil,
+           let data = defaults.data(forKey: "currentUser"),
+           let storedUser = try? JSONDecoder().decode(UserDTO.self, from: data) {
+            user = storedUser
+        } else {
+            user = nil
+        }
+    }
+
+    func refreshUser() async {
+        guard let token,
+              let refreshedUser = try? await APIClient(token: token).me() else { return }
+        user = refreshedUser
     }
 }
 
@@ -58,12 +96,46 @@ struct APIClient {
         try await request("auth/sms/verify", method: "POST", body: SmsVerifyRequest(phone: phone, code: code, name: name))
     }
 
+    func me() async throws -> UserDTO {
+        try await request("auth/me")
+    }
+
+    func updateProfile(name: String, avatarData: Data? = nil) async throws -> UserDTO {
+        if let avatarData {
+            return try await requestMultipart(
+                "profile",
+                method: "POST",
+                fields: ["_method": "PATCH", "name": name],
+                fileFieldName: "avatar",
+                imageData: avatarData
+            )
+        }
+
+        return try await request("profile", method: "PATCH", body: ProfileUpdateRequest(name: name))
+    }
+
     func families() async throws -> [FamilyDTO] {
         try await request("families")
     }
 
     func createFamily(name: String) async throws -> FamilyDTO {
         try await request("families", method: "POST", body: FamilyCreateRequest(name: name))
+    }
+
+    func updateFamily(id: Int, name: String) async throws -> FamilyDTO {
+        try await request("families/\(id)", method: "PATCH", body: FamilyCreateRequest(name: name))
+    }
+
+    func familyMembers(familyId: Int) async throws -> [FamilyMemberDTO] {
+        try await request("families/\(familyId)/members")
+    }
+
+    func inviteMember(familyId: Int, phone: String?) async throws -> FamilyInviteDTO {
+        try await request("families/\(familyId)/invites", method: "POST", body: FamilyInviteRequest(phone: phone))
+    }
+
+    func removeMember(familyId: Int, memberId: Int) async throws {
+        try await requestVoid("families/\(familyId)/members/\(memberId)", method: "DELETE")
     }
 
     func spaces(familyId: Int) async throws -> [SpaceDTO] {
@@ -84,6 +156,32 @@ struct APIClient {
         return try await request("spaces", method: "POST", body: SpaceCreateRequest(familyId: familyId, name: name, description: description, nfcUid: nfcUid))
     }
 
+    func updateSpace(id: Int, name: String, description: String?, nfcUid: String?, imageData: Data? = nil) async throws -> SpaceDTO {
+        if let imageData {
+            return try await requestMultipart(
+                "spaces/\(id)",
+                method: "POST",
+                fields: [
+                    "_method": "PATCH",
+                    "name": name,
+                    "description": description ?? "",
+                    "nfc_uid": nfcUid ?? ""
+                ],
+                imageData: imageData
+            )
+        }
+
+        return try await request(
+            "spaces/\(id)",
+            method: "PATCH",
+            body: SpaceUpdateRequest(name: name, description: description, nfcUid: nfcUid)
+        )
+    }
+
+    func deleteSpace(id: Int) async throws {
+        try await requestVoid("spaces/\(id)", method: "DELETE")
+    }
+
     func items(familyId: Int) async throws -> [ItemDTO] {
         try await request("items?family_id=\(familyId)")
     }
@@ -99,6 +197,22 @@ struct APIClient {
         return try await request("items", method: "POST", body: payload)
     }
 
+    func updateItem(id: Int, payload: [String: EncodableValue], imageData: Data? = nil) async throws -> ItemDTO {
+        if let imageData {
+            var fields = Dictionary(uniqueKeysWithValues: payload.compactMap { key, value in
+                value.multipartValue.map { (key, $0) }
+            })
+            fields["_method"] = "PATCH"
+            return try await requestMultipart("items/\(id)", method: "POST", fields: fields, imageData: imageData)
+        }
+
+        return try await request("items/\(id)", method: "PATCH", body: payload)
+    }
+
+    func deleteItem(id: Int) async throws {
+        try await requestVoid("items/\(id)", method: "DELETE")
+    }
+
     func adjustItem(id: Int, delta: Int, reason: String?) async throws -> ItemDTO {
         try await request("items/\(id)/adjust", method: "POST", body: ItemAdjustRequest(delta: delta, reason: reason))
     }
@@ -109,6 +223,10 @@ struct APIClient {
 
     func createReminder(_ payload: [String: EncodableValue]) async throws -> ReminderDTO {
         try await request("reminders", method: "POST", body: payload)
+    }
+
+    func updateReminder(id: Int, payload: [String: EncodableValue]) async throws -> ReminderDTO {
+        try await request("reminders/\(id)", method: "PATCH", body: payload)
     }
 
     func deleteReminder(id: Int) async throws {
@@ -178,7 +296,7 @@ struct APIClient {
         }
     }
 
-    private func requestMultipart<T: Decodable>(_ path: String, method: String, fields: [String: String], imageData: Data) async throws -> T {
+    private func requestMultipart<T: Decodable>(_ path: String, method: String, fields: [String: String], fileFieldName: String = "image", imageData: Data) async throws -> T {
         guard let url = URL(string: baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + path) else {
             throw URLError(.badURL)
         }
@@ -196,7 +314,7 @@ struct APIClient {
         for (key, value) in fields {
             body.appendMultipartField(name: key, value: value, boundary: boundary)
         }
-        body.appendMultipartFile(name: "image", filename: "upload.jpg", mimeType: "image/jpeg", data: imageData, boundary: boundary)
+        body.appendMultipartFile(name: fileFieldName, filename: "upload.jpg", mimeType: "image/jpeg", data: imageData, boundary: boundary)
         body.appendString("--\(boundary)--\r\n")
         request.httpBody = body
 
@@ -310,6 +428,14 @@ private struct FamilyCreateRequest: Encodable {
     let name: String
 }
 
+private struct FamilyInviteRequest: Encodable {
+    let phone: String?
+}
+
+private struct ProfileUpdateRequest: Encodable {
+    let name: String
+}
+
 private struct SpaceCreateRequest: Encodable {
     let familyId: Int
     let name: String
@@ -318,6 +444,18 @@ private struct SpaceCreateRequest: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case familyId = "family_id"
+        case name
+        case description
+        case nfcUid = "nfc_uid"
+    }
+}
+
+private struct SpaceUpdateRequest: Encodable {
+    let name: String
+    let description: String?
+    let nfcUid: String?
+
+    enum CodingKeys: String, CodingKey {
         case name
         case description
         case nfcUid = "nfc_uid"
@@ -333,6 +471,7 @@ enum EncodableValue: Encodable {
     case int(Int)
     case string(String)
     case date(Date)
+    case bool(Bool)
     case null
 
     func encode(to encoder: Encoder) throws {
@@ -341,6 +480,7 @@ enum EncodableValue: Encodable {
         case .int(let value): try container.encode(value)
         case .string(let value): try container.encode(value)
         case .date(let value): try container.encode(value)
+        case .bool(let value): try container.encode(value)
         case .null: try container.encodeNil()
         }
     }
@@ -350,6 +490,7 @@ enum EncodableValue: Encodable {
         case .int(let value): String(value)
         case .string(let value): value
         case .date(let value): ISO8601DateFormatter().string(from: value)
+        case .bool(let value): value ? "1" : "0"
         case .null: nil
         }
     }
