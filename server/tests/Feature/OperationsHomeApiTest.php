@@ -168,6 +168,84 @@ class OperationsHomeApiTest extends TestCase
             ->assertJson(fn ($json) => $json->where('ok', true)->whereType('data.image_url', 'string')->etc());
     }
 
+    public function test_user_can_refresh_and_update_profile_with_avatar(): void
+    {
+        $this->app->instance(QiniuStorage::class, new class extends QiniuStorage
+        {
+            public function uploadAvatar(UploadedFile $file, int $userId): array
+            {
+                return [
+                    'key' => "users/{$userId}/avatar/fake.png",
+                    'hash' => 'avatar-hash',
+                    'url' => "https://cdn.example.com/users/{$userId}/avatar/fake.png",
+                ];
+            }
+
+            public function url(string $key): string
+            {
+                return 'https://cdn.example.com/'.$key;
+            }
+        });
+
+        [$user, $token] = $this->login('13800000010');
+
+        $this->withToken($token)->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', $user->id)
+            ->assertJsonPath('data.phone', '13800000010');
+
+        $this->withToken($token)->post('/api/profile', [
+            '_method' => 'PATCH',
+            'name' => '新的昵称',
+            'avatar' => $this->fakePngUpload(),
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.name', '新的昵称')
+            ->assertJsonPath('data.avatar_hash', 'avatar-hash');
+    }
+
+    public function test_only_owner_can_update_family_and_remove_member(): void
+    {
+        [$owner, $ownerToken] = $this->login('13800000011');
+        [$member] = $this->login('13800000012');
+
+        $familyId = $this->withToken($ownerToken)
+            ->postJson('/api/families', ['name' => '原家庭名'])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'owner')
+            ->json('data.id');
+
+        $membership = \App\Models\Family::findOrFail($familyId)->members()->create([
+            'user_id' => $member->id,
+            'role' => 'member',
+        ]);
+
+        Sanctum::actingAs($member);
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', $member->id);
+
+        $this->patchJson("/api/families/{$familyId}", ['name' => '越权修改'])
+            ->assertForbidden();
+
+        Sanctum::actingAs($owner);
+        $this->patchJson("/api/families/{$familyId}", ['name' => '新家庭名'])
+            ->assertOk()
+            ->assertJsonPath('data.name', '新家庭名');
+
+        $this->getJson("/api/families/{$familyId}/members")
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $membership->id,
+                'user_id' => $member->id,
+                'phone' => $member->phone,
+                'role' => 'member',
+            ]);
+
+        $this->deleteJson("/api/families/{$familyId}/members/{$membership->id}")
+            ->assertOk();
+    }
+
     private function login(string $phone): array
     {
         $this->postJson('/api/auth/sms/send', ['phone' => $phone])->assertOk();

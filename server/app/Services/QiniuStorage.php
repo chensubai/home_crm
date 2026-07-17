@@ -17,9 +17,21 @@ class QiniuStorage
 {
     public function uploadImage(UploadedFile $file, int $familyId, string $directory = 'images'): array
     {
+        $prefix = sprintf('families/%d/%s', $familyId, trim($directory, '/'));
+
+        return $this->uploadToKeyPrefix($file, $prefix);
+    }
+
+    public function uploadAvatar(UploadedFile $file, int $userId): array
+    {
+        return $this->uploadToKeyPrefix($file, sprintf('users/%d/avatar', $userId));
+    }
+
+    private function uploadToKeyPrefix(UploadedFile $file, string $prefix): array
+    {
         $this->ensureConfigured();
 
-        $key = $this->makeKey($file, $familyId, $directory);
+        $key = $this->makeKey($file, $prefix);
         $auth = $this->auth();
         $uploadToken = $auth->uploadToken((string) config('services.qiniu.bucket'));
         $uploadManager = new UploadManager($this->qiniuConfig());
@@ -70,15 +82,13 @@ class QiniuStorage
         return $domain.'/'.$encodedKey;
     }
 
-    private function makeKey(UploadedFile $file, int $familyId, string $directory): string
+    private function makeKey(UploadedFile $file, string $prefix): string
     {
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
-        $directory = trim($directory, '/');
 
         return sprintf(
-            'families/%d/%s/%s.%s',
-            $familyId,
-            $directory,
+            '%s/%s.%s',
+            trim($prefix, '/'),
             (string) Str::uuid(),
             $extension
         );
