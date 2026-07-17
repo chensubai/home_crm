@@ -26,4 +26,9 @@ class StorageSpace extends Model
     {
         return $this->hasMany(NfcTag::class, 'space_id');
     }
+
+    public function items()
+    {
+        return $this->hasMany(Item::class, 'space_id');
+    }
 }

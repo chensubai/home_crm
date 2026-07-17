@@ -141,6 +141,7 @@ return new class extends Migration
             'remind_at' => '提醒触发时间',
             'repeat_rule' => '重复规则：none/daily/weekly/monthly/yearly',
             'repeat_value' => '重复规则附加值：weekly存星期编号逗号列表，monthly存每月日期号',
+            'is_enabled' => '提醒是否启用：1=启用，0=停用',
             'notes' => '提醒备注',
             'completed_at' => '完成时间',
             'created_at' => '创建时间',

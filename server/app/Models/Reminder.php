@@ -9,6 +9,10 @@ class Reminder extends Model
 {
     use SoftDeletes;
 
+    protected $attributes = [
+        'is_enabled' => true,
+    ];
+
     protected $fillable = [
         'family_id',
         'assignee_id',
@@ -17,6 +21,7 @@ class Reminder extends Model
         'remind_at',
         'repeat_rule',
         'repeat_value',
+        'is_enabled',
         'notes',
         'completed_at',
     ];
@@ -25,6 +30,7 @@ class Reminder extends Model
         'family_id' => 'integer',
         'assignee_id' => 'integer',
         'remind_at' => 'datetime',
+        'is_enabled' => 'boolean',
         'completed_at' => 'datetime',
     ];
 }

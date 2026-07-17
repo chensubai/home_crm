@@ -246,6 +246,154 @@ class OperationsHomeApiTest extends TestCase
             ->assertOk();
     }
 
+    public function test_space_nfc_update_and_nonempty_delete_are_safe(): void
+    {
+        [, $token] = $this->login('13800000020');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '空间测试家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', [
+                'family_id' => $familyId,
+                'name' => '原柜子',
+                'nfc_uid' => 'nfc-old',
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $itemId = $this->withToken($token)
+            ->postJson('/api/items', [
+                'family_id' => $familyId,
+                'space_id' => $spaceId,
+                'name' => '纸巾',
+                'quantity' => 1,
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)->patchJson("/api/spaces/{$spaceId}", [
+            'name' => '更新后的柜子',
+            'description' => '客厅北侧',
+            'nfc_uid' => 'nfc-updated',
+        ])->assertOk()
+            ->assertJsonPath('data.nfc_uid', 'nfc-updated');
+
+        $this->withToken($token)->deleteJson("/api/spaces/{$spaceId}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', '空间内仍有物品，请先移动或删除物品');
+
+        $this->withToken($token)->deleteJson("/api/items/{$itemId}")->assertOk();
+        $this->withToken($token)->deleteJson("/api/spaces/{$spaceId}")->assertOk();
+    }
+
+    public function test_item_adjustment_is_clamped_and_space_stays_in_family(): void
+    {
+        [, $token] = $this->login('13800000021');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '库存家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $otherFamilyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '另一个家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '本家庭柜子'])
+            ->assertCreated()
+            ->json('data.id');
+        $otherSpaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $otherFamilyId, 'name' => '其他家庭柜子'])
+            ->assertCreated()
+            ->json('data.id');
+        $itemId = $this->withToken($token)
+            ->postJson('/api/items', [
+                'family_id' => $familyId,
+                'space_id' => $spaceId,
+                'name' => '清洁剂',
+                'quantity' => 2,
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)->postJson("/api/items/{$itemId}/adjust", ['delta' => -99])
+            ->assertOk()
+            ->assertJsonPath('data.quantity', 0);
+        $this->assertDatabaseHas('item_changes', [
+            'item_id' => $itemId,
+            'before_quantity' => 2,
+            'after_quantity' => 0,
+            'delta' => -2,
+        ]);
+
+        $this->withToken($token)->patchJson("/api/items/{$itemId}", [
+            'space_id' => $otherSpaceId,
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors('space_id');
+    }
+
+    public function test_reused_nfc_uid_keeps_only_one_active_tag_for_space(): void
+    {
+        [, $token] = $this->login('13800000023');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => 'NFC 重绑家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $targetSpaceId = $this->withToken($token)
+            ->postJson('/api/spaces', [
+                'family_id' => $familyId,
+                'name' => '目标柜子',
+                'nfc_uid' => 'target-old',
+            ])->assertCreated()->json('data.id');
+        $sourceSpaceId = $this->withToken($token)
+            ->postJson('/api/spaces', [
+                'family_id' => $familyId,
+                'name' => '来源柜子',
+                'nfc_uid' => 'reusable',
+            ])->assertCreated()->json('data.id');
+
+        $this->withToken($token)->patchJson("/api/spaces/{$sourceSpaceId}", ['nfc_uid' => null])
+            ->assertOk()
+            ->assertJsonPath('data.nfc_uid', null);
+        $this->withToken($token)->patchJson("/api/spaces/{$targetSpaceId}", ['nfc_uid' => 'reusable'])
+            ->assertOk()
+            ->assertJsonPath('data.nfc_uid', 'reusable');
+        $this->withToken($token)->patchJson("/api/spaces/{$targetSpaceId}", ['nfc_uid' => 'target-final'])
+            ->assertOk()
+            ->assertJsonPath('data.nfc_uid', 'target-final');
+
+        $this->assertSame(1, \App\Models\NfcTag::query()
+            ->where('space_id', $targetSpaceId)
+            ->count());
+    }
+
+    public function test_reminder_can_be_disabled_and_sync_keeps_state(): void
+    {
+        [, $token] = $this->login('13800000022');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '提醒家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $reminderId = $this->withToken($token)
+            ->postJson('/api/reminders', [
+                'family_id' => $familyId,
+                'title' => '缴费',
+                'remind_at' => now()->addDay()->toIso8601String(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.is_enabled', true)
+            ->json('data.id');
+
+        $this->withToken($token)->patchJson("/api/reminders/{$reminderId}", [
+            'title' => '暂停的提醒',
+            'is_enabled' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.is_enabled', false);
+
+        $this->withToken($token)->getJson("/api/sync?family_id={$familyId}")
+            ->assertOk()
+            ->assertJsonPath('data.reminders.0.is_enabled', false);
+    }
+
     private function login(string $phone): array
     {
         $this->postJson('/api/auth/sms/send', ['phone' => $phone])->assertOk();

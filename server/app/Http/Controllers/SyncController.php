@@ -27,7 +27,7 @@ class SyncController extends Controller
 
         return $this->ok([
             'cursor' => now()->utc()->toJSON(),
-            'spaces' => StorageSpace::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
+            'spaces' => StorageSpace::withTrashed()->with('nfcTags')->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
                 fn (StorageSpace $space) => $this->withImageUrl($space, $storage)
             ),
             'items' => Item::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
@@ -64,7 +64,7 @@ class SyncController extends Controller
         foreach ($data['reminders'] ?? [] as $reminder) {
             Reminder::withTrashed()->updateOrCreate(
                 ['id' => $reminder['id'] ?? null],
-                collect($reminder)->only(['family_id', 'assignee_id', 'title', 'kind', 'remind_at', 'repeat_rule', 'repeat_value', 'notes', 'completed_at', 'deleted_at', 'updated_at'])->all()
+                collect($reminder)->only(['family_id', 'assignee_id', 'title', 'kind', 'remind_at', 'repeat_rule', 'repeat_value', 'is_enabled', 'notes', 'completed_at', 'deleted_at', 'updated_at'])->all()
             );
         }
 
@@ -75,6 +75,9 @@ class SyncController extends Controller
     {
         if ($record->image_key !== null) {
             $record->image_url = $storage->url($record->image_key);
+        }
+        if ($record instanceof StorageSpace) {
+            $record->setAttribute('nfc_uid', $record->nfcTags->first()?->uid);
         }
 
         return $record;

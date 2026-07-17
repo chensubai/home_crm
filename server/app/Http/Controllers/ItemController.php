@@ -6,8 +6,11 @@ use App\Exceptions\QiniuUploadException;
 use App\Http\Controllers\Concerns\AuthorizesFamilyAccess;
 use App\Models\Item;
 use App\Models\ItemChange;
+use App\Models\StorageSpace;
 use App\Services\QiniuStorage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ItemController extends Controller
 {
@@ -27,6 +30,7 @@ class ItemController extends Controller
     {
         $data = $request->validate($this->rules(['family_id', 'space_id', 'name', 'quantity']));
         $this->authorizeFamily($request->user(), (int) $data['family_id']);
+        $this->ensureSpaceBelongsToFamily((int) $data['space_id'], (int) $data['family_id']);
         try {
             $data = $this->attachImageData($data, $storage, (int) $data['family_id']);
         } catch (QiniuUploadException $exception) {
@@ -40,6 +44,9 @@ class ItemController extends Controller
     {
         $this->authorizeFamily($request->user(), $item->family_id);
         $data = $request->validate($this->rules([], true));
+        if (array_key_exists('space_id', $data)) {
+            $this->ensureSpaceBelongsToFamily((int) $data['space_id'], $item->family_id);
+        }
         try {
             $data = $this->attachImageData($data, $storage, $item->family_id);
         } catch (QiniuUploadException $exception) {
@@ -66,19 +73,25 @@ class ItemController extends Controller
             'reason' => ['nullable', 'string', 'max:120'],
         ]);
 
-        $before = $item->quantity;
-        $item->increment('quantity', $data['delta']);
-        $item->refresh();
+        $item = DB::transaction(function () use ($item, $data, $request) {
+            $lockedItem = Item::query()->lockForUpdate()->findOrFail($item->id);
+            $before = $lockedItem->quantity;
+            $after = max(0, $before + (int) $data['delta']);
+            $actualDelta = $after - $before;
 
-        ItemChange::create([
-            'family_id' => $item->family_id,
-            'item_id' => $item->id,
-            'user_id' => $request->user()->id,
-            'before_quantity' => $before,
-            'after_quantity' => $item->quantity,
-            'delta' => $data['delta'],
-            'reason' => $data['reason'] ?? null,
-        ]);
+            $lockedItem->update(['quantity' => $after]);
+            ItemChange::create([
+                'family_id' => $lockedItem->family_id,
+                'item_id' => $lockedItem->id,
+                'user_id' => $request->user()->id,
+                'before_quantity' => $before,
+                'after_quantity' => $after,
+                'delta' => $actualDelta,
+                'reason' => $data['reason'] ?? null,
+            ]);
+
+            return $lockedItem->fresh();
+        });
 
         return $this->ok($this->withImageUrl($item, $storage));
     }
@@ -116,6 +129,20 @@ class ItemController extends Controller
             'image_url' => $uploaded['url'],
             'image_hash' => $uploaded['hash'],
         ]);
+    }
+
+    private function ensureSpaceBelongsToFamily(int $spaceId, int $familyId): void
+    {
+        $exists = StorageSpace::query()
+            ->whereKey($spaceId)
+            ->where('family_id', $familyId)
+            ->exists();
+
+        if (! $exists) {
+            throw ValidationException::withMessages([
+                'space_id' => '存放空间不属于当前家庭',
+            ]);
+        }
     }
 
     private function withImageUrl(Item $item, QiniuStorage $storage): Item
