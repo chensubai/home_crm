@@ -1,14 +1,28 @@
 import Foundation
 import UserNotifications
 
+struct NotificationSchedule {
+    let identifier: String
+    let components: DateComponents
+    let repeats: Bool
+}
+
 struct NotificationScheduler {
     func requestAuthorization() async {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
     }
 
-    func schedule(reminder: ReminderRecord) {
-        guard reminder.deletedAt == nil, reminder.completedAt == nil else { return }
-        guard reminder.repeatRule != .none || reminder.remindAt > .now else { return }
+    func cancel(reminderId: Int) async {
+        let center = UNUserNotificationCenter.current()
+        let baseIdentifier = "reminder-\(reminderId)"
+        let identifiers = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0 == baseIdentifier || $0.hasPrefix("\(baseIdentifier)-") }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    func schedule(reminder: ReminderRecord) async {
+        await cancel(reminderId: reminder.remoteId)
 
         let content = UNMutableNotificationContent()
         content.title = "运营小家"
@@ -19,20 +33,27 @@ struct NotificationScheduler {
             let trigger = UNCalendarNotificationTrigger(dateMatching: schedule.components, repeats: schedule.repeats)
             let request = UNNotificationRequest(identifier: schedule.identifier, content: content, trigger: trigger)
 
-            UNUserNotificationCenter.current().add(request)
+            try? await UNUserNotificationCenter.current().add(request)
         }
     }
 
-    private func schedules(for reminder: ReminderRecord) -> [(identifier: String, components: DateComponents, repeats: Bool)] {
+    func schedules(for reminder: ReminderRecord) -> [NotificationSchedule] {
+        guard reminder.isEnabled, reminder.deletedAt == nil, reminder.completedAt == nil else { return [] }
+        guard reminder.repeatRule != .none || reminder.remindAt > .now else { return [] }
+
         let calendar = Calendar.current
         let time = calendar.dateComponents([.hour, .minute], from: reminder.remindAt)
         let baseIdentifier = "reminder-\(reminder.remoteId)"
 
         switch reminder.repeatRule {
         case .none:
-            return [(baseIdentifier, calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminder.remindAt), false)]
+            return [NotificationSchedule(
+                identifier: baseIdentifier,
+                components: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminder.remindAt),
+                repeats: false
+            )]
         case .daily:
-            return [(baseIdentifier, time, true)]
+            return [NotificationSchedule(identifier: baseIdentifier, components: time, repeats: true)]
         case .weekly:
             let weekdays = reminder.repeatValue?
                 .split(separator: ",")
@@ -42,14 +63,22 @@ struct NotificationScheduler {
             return (weekdays?.isEmpty == false ? weekdays! : [calendar.component(.weekday, from: reminder.remindAt)]).map { weekday in
                 var components = time
                 components.weekday = weekday
-                return ("\(baseIdentifier)-weekday-\(weekday)", components, true)
+                return NotificationSchedule(
+                    identifier: "\(baseIdentifier)-weekday-\(weekday)",
+                    components: components,
+                    repeats: true
+                )
             }
         case .monthly:
             var components = time
             components.day = Int(reminder.repeatValue ?? "") ?? calendar.component(.day, from: reminder.remindAt)
-            return [(baseIdentifier, components, true)]
+            return [NotificationSchedule(identifier: baseIdentifier, components: components, repeats: true)]
         case .yearly:
-            return [(baseIdentifier, calendar.dateComponents([.month, .day, .hour, .minute], from: reminder.remindAt), true)]
+            return [NotificationSchedule(
+                identifier: baseIdentifier,
+                components: calendar.dateComponents([.month, .day, .hour, .minute], from: reminder.remindAt),
+                repeats: true
+            )]
         }
     }
 }

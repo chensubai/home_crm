@@ -7,7 +7,9 @@ struct RemindersView: View {
     @ObservedObject var sync: SyncEngine
     @Query private var allReminders: [ReminderRecord]
     @State private var isAdding = false
+    @State private var editingReminder: ReminderRecord?
     @State private var message = ""
+    private let scheduler = NotificationScheduler()
 
     private var reminders: [ReminderRecord] {
         allReminders
@@ -56,9 +58,12 @@ struct RemindersView: View {
                                 ForEach(reminders) { reminder in
                                     AlarmReminderRow(
                                         time: reminderTime(for: reminder),
-                                        title: reminder.title,
                                         subtitle: reminderDetail(for: reminder),
-                                        isEnabled: reminder.completedAt == nil
+                                        isEnabled: reminder.isEnabled,
+                                        onEdit: { editingReminder = reminder },
+                                        onToggle: { isEnabled in
+                                            Task { await toggle(reminder, isEnabled: isEnabled) }
+                                        }
                                     )
                                     .listRowInsets(EdgeInsets(top: 6, leading: 18, bottom: 6, trailing: 18))
                                     .listRowSeparator(.hidden)
@@ -80,7 +85,7 @@ struct RemindersView: View {
                         if !message.isEmpty {
                             Text(message)
                                 .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.red)
                                 .padding(.horizontal, 18)
                         }
                     }
@@ -93,6 +98,9 @@ struct RemindersView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isAdding) {
                 ReminderFormView(session: session, sync: sync)
+            }
+            .sheet(item: $editingReminder) { reminder in
+                ReminderFormView(session: session, sync: sync, reminder: reminder)
             }
         }
     }
@@ -128,9 +136,33 @@ struct RemindersView: View {
 
         do {
             try await APIClient(token: token).deleteReminder(id: reminder.remoteId)
+            await scheduler.cancel(reminderId: reminder.remoteId)
             await sync.pull(familyId: familyId, token: token, context: context)
+            message = ""
         } catch {
             reminder.deletedAt = previousDeletedAt
+            try? context.save()
+            message = error.localizedDescription
+        }
+    }
+
+    private func toggle(_ reminder: ReminderRecord, isEnabled: Bool) async {
+        guard let token = session.token else { return }
+        let previousValue = reminder.isEnabled
+        reminder.isEnabled = isEnabled
+        try? context.save()
+
+        do {
+            let dto = try await APIClient(token: token).updateReminder(
+                id: reminder.remoteId,
+                payload: ["is_enabled": .bool(isEnabled)]
+            )
+            apply(dto, to: reminder)
+            try context.save()
+            await scheduler.schedule(reminder: reminder)
+            message = ""
+        } catch {
+            reminder.isEnabled = previousValue
             try? context.save()
             message = error.localizedDescription
         }
@@ -139,31 +171,35 @@ struct RemindersView: View {
 
 private struct AlarmReminderRow: View {
     var time: String
-    var title: String
     var subtitle: String
     var isEnabled: Bool
+    var onEdit: () -> Void
+    var onToggle: (Bool) -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(time)
-                    .font(.system(size: 40, weight: .light, design: .rounded))
-                    .foregroundStyle(isEnabled ? Color(red: 0.16, green: 0.18, blue: 0.16) : .secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
+            Button(action: onEdit) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(time)
+                        .font(.system(size: 40, weight: .light, design: .rounded))
+                        .foregroundStyle(isEnabled ? Color(red: 0.16, green: 0.18, blue: 0.16) : .secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
 
-                Text(subtitle)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    Text(subtitle)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("编辑提醒 \(subtitle)")
 
-            Spacer()
-
-            Toggle("", isOn: .constant(isEnabled))
+            Toggle("", isOn: Binding(get: { isEnabled }, set: onToggle))
                 .labelsHidden()
                 .tint(Color(red: 0.30, green: 0.48, blue: 0.36))
-                .disabled(true)
+                .accessibilityLabel("启用提醒")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -204,15 +240,42 @@ struct ReminderFormView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
-    @State private var title = ""
-    @State private var reminderDate = Date()
-    @State private var reminderTime = Date().addingTimeInterval(3600)
-    @State private var kind = ReminderKind.importantDate
-    @State private var repeatRule = RepeatRule.none
-    @State private var weeklyChoice = WeeklyRepeatChoice.workdays
-    @State private var monthlyDay = Calendar.current.component(.day, from: Date())
-    @State private var notes = ""
+    var reminder: ReminderRecord?
+    @State private var title: String
+    @State private var reminderDate: Date
+    @State private var reminderTime: Date
+    @State private var kind: ReminderKind
+    @State private var repeatRule: RepeatRule
+    @State private var weeklyChoice: WeeklyRepeatChoice
+    @State private var monthlyDay: Int
+    @State private var notes: String
     @State private var message = ""
+    private let scheduler = NotificationScheduler()
+
+    init(session: SessionStore, sync: SyncEngine, reminder: ReminderRecord? = nil) {
+        self._session = ObservedObject(wrappedValue: session)
+        self._sync = ObservedObject(wrappedValue: sync)
+        self.reminder = reminder
+
+        let initialKind = reminder?.kind ?? .importantDate
+        let storedRule = reminder?.repeatRule ?? .none
+        let initialRule: RepeatRule
+        if initialKind == .periodicTask {
+            initialRule = [.daily, .weekly, .monthly].contains(storedRule) ? storedRule : .weekly
+        } else {
+            initialRule = .none
+        }
+
+        let date = reminder?.remindAt ?? .now
+        self._title = State(initialValue: reminder?.title ?? "")
+        self._reminderDate = State(initialValue: date)
+        self._reminderTime = State(initialValue: reminder?.remindAt ?? Date().addingTimeInterval(3600))
+        self._kind = State(initialValue: initialKind)
+        self._repeatRule = State(initialValue: initialRule)
+        self._weeklyChoice = State(initialValue: WeeklyRepeatChoice(rawValue: reminder?.repeatValue ?? "") ?? .workdays)
+        self._monthlyDay = State(initialValue: min(31, max(1, Int(reminder?.repeatValue ?? "") ?? Calendar.current.component(.day, from: date))))
+        self._notes = State(initialValue: reminder?.notes ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -222,7 +285,7 @@ struct ReminderFormView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         FormHeaderView(
-                            title: "新提醒",
+                            title: reminder == nil ? "新提醒" : "编辑提醒",
                             subtitle: "一次性提醒选择日期和时间；周期提醒只设置触发时间。",
                             systemImage: "bell"
                         )
@@ -241,17 +304,13 @@ struct ReminderFormView: View {
                         }
 
                         GlassSection(title: "提醒规则") {
-                            Picker("重复", selection: $repeatRule) {
-                                Text("不重复").tag(RepeatRule.none)
-                                Text("每天").tag(RepeatRule.daily)
-                                Text("每周").tag(RepeatRule.weekly)
-                                Text("每月").tag(RepeatRule.monthly)
-                            }
+                            if kind == .periodicTask {
+                                Picker("周期", selection: $repeatRule) {
+                                    Text("每天").tag(RepeatRule.daily)
+                                    Text("每周").tag(RepeatRule.weekly)
+                                    Text("每月").tag(RepeatRule.monthly)
+                                }
 
-                            if repeatRule == .none {
-                                DatePicker("日期", selection: $reminderDate, displayedComponents: .date)
-                                DatePicker("时间", selection: $reminderTime, displayedComponents: .hourAndMinute)
-                            } else {
                                 DatePicker("提醒时间", selection: $reminderTime, displayedComponents: .hourAndMinute)
 
                                 if repeatRule == .weekly {
@@ -269,8 +328,12 @@ struct ReminderFormView: View {
                                         }
                                     }
                                 }
+                            } else {
+                                DatePicker("日期", selection: $reminderDate, displayedComponents: .date)
+                                DatePicker("时间", selection: $reminderTime, displayedComponents: .hourAndMinute)
                             }
                         }
+                        .environment(\.locale, Locale(identifier: "zh_CN"))
 
                         GlassSection(title: "备注") {
                             TextField("可选", text: $notes, axis: .vertical)
@@ -280,7 +343,7 @@ struct ReminderFormView: View {
                         if !message.isEmpty {
                             Text(message)
                                 .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.red)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -296,9 +359,12 @@ struct ReminderFormView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { Task { await save() } }
-                        .disabled(title.isEmpty || session.selectedFamilyId == nil)
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
                 }
             }
+        }
+        .onChange(of: kind) { _, newKind in
+            repeatRule = newKind == .periodicTask ? .weekly : .none
         }
     }
 
@@ -311,17 +377,25 @@ struct ReminderFormView: View {
             "remind_at": .date(scheduledRemindAt),
             "repeat_rule": .string(repeatRule.rawValue)
         ]
-        if let repeatValue {
-            payload["repeat_value"] = .string(repeatValue)
-        }
-        if !notes.isEmpty { payload["notes"] = .string(notes) }
+        payload["repeat_value"] = repeatValue.map(EncodableValue.string) ?? .null
+        payload["notes"] = notes.isEmpty ? .null : .string(notes)
 
         do {
-            let dto = try await APIClient(token: token).createReminder(payload)
-            let reminder = ReminderRecord(remoteId: dto.id, familyId: dto.familyId, title: dto.title, kind: ReminderKind(rawValue: dto.kind) ?? .importantDate, remindAt: dto.remindAt, repeatRule: RepeatRule(rawValue: dto.repeatRule) ?? .none, repeatValue: dto.repeatValue, notes: dto.notes)
-            context.insert(reminder)
-            NotificationScheduler().schedule(reminder: reminder)
-            try? context.save()
+            let client = APIClient(token: token)
+            let savedReminder: ReminderRecord
+            if let reminder {
+                let dto = try await client.updateReminder(id: reminder.remoteId, payload: payload)
+                await scheduler.cancel(reminderId: reminder.remoteId)
+                apply(dto, to: reminder)
+                savedReminder = reminder
+            } else {
+                let dto = try await client.createReminder(payload)
+                let newReminder = makeReminder(from: dto)
+                context.insert(newReminder)
+                savedReminder = newReminder
+            }
+            try context.save()
+            await scheduler.schedule(reminder: savedReminder)
             await sync.pull(familyId: familyId, token: token, context: context)
             dismiss()
         } catch {
@@ -333,7 +407,7 @@ struct ReminderFormView: View {
         let calendar = Calendar.current
         let time = calendar.dateComponents([.hour, .minute], from: reminderTime)
 
-        if repeatRule == .none {
+        if kind != .periodicTask {
             var components = calendar.dateComponents([.year, .month, .day], from: reminderDate)
             components.hour = time.hour
             components.minute = time.minute
@@ -363,13 +437,14 @@ struct ReminderFormView: View {
     }
 
     private var repeatValue: String? {
+        guard kind == .periodicTask else { return nil }
         switch repeatRule {
         case .none, .daily, .yearly:
-            nil
+            return nil
         case .weekly:
-            weeklyChoice.rawValue
+            return weeklyChoice.rawValue
         case .monthly:
-            String(monthlyDay)
+            return String(monthlyDay)
         }
     }
 
@@ -418,6 +493,37 @@ struct ReminderFormView: View {
         next.minute = minute
         return calendar.date(from: next) ?? now
     }
+}
+
+private func makeReminder(from dto: ReminderDTO) -> ReminderRecord {
+    ReminderRecord(
+        remoteId: dto.id,
+        familyId: dto.familyId,
+        title: dto.title,
+        kind: ReminderKind(rawValue: dto.kind) ?? .importantDate,
+        remindAt: dto.remindAt,
+        repeatRule: RepeatRule(rawValue: dto.repeatRule) ?? .none,
+        repeatValue: dto.repeatValue,
+        notes: dto.notes,
+        isEnabled: dto.isEnabled,
+        completedAt: dto.completedAt,
+        updatedAt: dto.updatedAt ?? .now,
+        deletedAt: dto.deletedAt
+    )
+}
+
+private func apply(_ dto: ReminderDTO, to reminder: ReminderRecord) {
+    reminder.familyId = dto.familyId
+    reminder.title = dto.title
+    reminder.kindRaw = dto.kind
+    reminder.remindAt = dto.remindAt
+    reminder.repeatRuleRaw = dto.repeatRule
+    reminder.repeatValue = dto.repeatValue
+    reminder.notes = dto.notes
+    reminder.isEnabled = dto.isEnabled
+    reminder.completedAt = dto.completedAt
+    reminder.updatedAt = dto.updatedAt ?? .now
+    reminder.deletedAt = dto.deletedAt
 }
 
 private enum ReminderDateFormatters {

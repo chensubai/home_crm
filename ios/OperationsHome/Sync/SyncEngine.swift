@@ -18,7 +18,7 @@ final class SyncEngine: ObservableObject {
             merge(payload, context: context)
             UserDefaults.standard.set(payload.cursor, forKey: "syncCursor.\(familyId)")
             try context.save()
-            rescheduleReminders(familyId: familyId, context: context)
+            await rescheduleReminders(familyId: familyId, context: context)
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -93,11 +93,11 @@ final class SyncEngine: ObservableObject {
         if record.modelContext == nil { context.insert(record) }
     }
 
-    private func rescheduleReminders(familyId: Int, context: ModelContext) {
-        let descriptor = FetchDescriptor<ReminderRecord>(predicate: #Predicate { $0.familyId == familyId && $0.deletedAt == nil })
+    private func rescheduleReminders(familyId: Int, context: ModelContext) async {
+        let descriptor = FetchDescriptor<ReminderRecord>(predicate: #Predicate { $0.familyId == familyId })
         guard let reminders = try? context.fetch(descriptor) else { return }
         for reminder in reminders {
-            scheduler.schedule(reminder: reminder)
+            await scheduler.schedule(reminder: reminder)
         }
     }
 }

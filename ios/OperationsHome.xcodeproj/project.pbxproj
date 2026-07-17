@@ -14,6 +14,7 @@
 		48D062E52FF6B6ABA80A0530 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1A95FCDFB64628913F0150 /* ContentView.swift */; };
 		491EE101F7DF0E3604101758 /* APIModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC6932D8BDBD96BEE41005A /* APIModelsTests.swift */; };
 		4F43313AF590E27614BCA298 /* ItemsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FD97768DE6ED6080A288C9 /* ItemsView.swift */; };
+		55E6512B19343CCCDE265858 /* NotificationSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33A07807CA8424FB16F0BE8 /* NotificationSchedulerTests.swift */; };
 		80C4808C218464FAAE5B4E8F /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF3FCFF5C7B14B04870AB7D /* ProfileView.swift */; };
 		9965858B6B764EC41F6B5D91 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6565E89A5D854A2101AD392 /* BarcodeScannerView.swift */; };
 		9EDF2C0B57B54497E8568667 /* ImageInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784431E7E4DFAFC7085A8248 /* ImageInputView.swift */; };
@@ -56,6 +57,7 @@
 		CA49CD599A115FE47A50A3AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D2CDA16AD771F94272CB870C /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		DDF3FCFF5C7B14B04870AB7D /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		E33A07807CA8424FB16F0BE8 /* NotificationSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSchedulerTests.swift; sourceTree = "<group>"; };
 		E40F3AA8A5140882CF4E4713 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		F6565E89A5D854A2101AD392 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -65,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				2DC6932D8BDBD96BEE41005A /* APIModelsTests.swift */,
+				E33A07807CA8424FB16F0BE8 /* NotificationSchedulerTests.swift */,
 				4DA2B1FC1D46221D6971C235 /* SessionStoreTests.swift */,
 			);
 			path = OperationsHomeTests;
@@ -227,6 +230,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				491EE101F7DF0E3604101758 /* APIModelsTests.swift in Sources */,
+				55E6512B19343CCCDE265858 /* NotificationSchedulerTests.swift in Sources */,
 				EECDA61AF0D9DA65F0D46B36 /* SessionStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
