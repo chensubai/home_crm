@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		032909028DE27A3E2F725486 /* ProfileEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C7ACB325F385C0945B91AD1 /* ProfileEditView.swift */; };
 		26DCE168D2CF6BF4498CD8BE /* RemindersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2CDA16AD771F94272CB870C /* RemindersView.swift */; };
 		3202AD1196ED17A974D0A0F3 /* OperationsHomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D016453AE1D17DD4159BEB /* OperationsHomeApp.swift */; };
 		338DBD4F4C4237E3A07ADEB2 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133AA6915CF33501FE55C529 /* APIModels.swift */; };
@@ -19,6 +20,7 @@
 		9965858B6B764EC41F6B5D91 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6565E89A5D854A2101AD392 /* BarcodeScannerView.swift */; };
 		9EDF2C0B57B54497E8568667 /* ImageInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784431E7E4DFAFC7085A8248 /* ImageInputView.swift */; };
 		A0518AD3514F8D2F85AFBA15 /* SpacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 539F0C466E38E29633BFC30F /* SpacesView.swift */; };
+		AE3A988ECD07A7EF71FC2F0E /* FamilyDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5DD2DAE657FC6A7CE2D814 /* FamilyDetailView.swift */; };
 		AE725DF552EB38992BE54531 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFDBC858E1DD0B6DF1647D23 /* HomeView.swift */; };
 		B7CD6EECD729D25600DBDF31 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4633EEB02530A79EBB168A77 /* NotificationScheduler.swift */; };
 		C34F1F3981EE0433A0349F80 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B31E030736CAE50978FED12 /* APIClient.swift */; };
@@ -39,6 +41,7 @@
 
 /* Begin PBXFileReference section */
 		133AA6915CF33501FE55C529 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		1C7ACB325F385C0945B91AD1 /* ProfileEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditView.swift; sourceTree = "<group>"; };
 		2DC6932D8BDBD96BEE41005A /* APIModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModelsTests.swift; sourceTree = "<group>"; };
 		44D016453AE1D17DD4159BEB /* OperationsHomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsHomeApp.swift; sourceTree = "<group>"; };
 		4633EEB02530A79EBB168A77 /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
@@ -50,6 +53,7 @@
 		82939938F739C16E17822BEF /* OperationsHomeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OperationsHomeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8E1A95FCDFB64628913F0150 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		98EA055C6882DB3050AD774B /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		9A5DD2DAE657FC6A7CE2D814 /* FamilyDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyDetailView.swift; sourceTree = "<group>"; };
 		9B31E030736CAE50978FED12 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		A0FD97768DE6ED6080A288C9 /* ItemsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemsView.swift; sourceTree = "<group>"; };
 		AFDBC858E1DD0B6DF1647D23 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -117,10 +121,12 @@
 			isa = PBXGroup;
 			children = (
 				8E1A95FCDFB64628913F0150 /* ContentView.swift */,
+				9A5DD2DAE657FC6A7CE2D814 /* FamilyDetailView.swift */,
 				AFDBC858E1DD0B6DF1647D23 /* HomeView.swift */,
 				784431E7E4DFAFC7085A8248 /* ImageInputView.swift */,
 				A0FD97768DE6ED6080A288C9 /* ItemsView.swift */,
 				E40F3AA8A5140882CF4E4713 /* LoginView.swift */,
+				1C7ACB325F385C0945B91AD1 /* ProfileEditView.swift */,
 				DDF3FCFF5C7B14B04870AB7D /* ProfileView.swift */,
 				D2CDA16AD771F94272CB870C /* RemindersView.swift */,
 				539F0C466E38E29633BFC30F /* SpacesView.swift */,
@@ -243,6 +249,7 @@
 				338DBD4F4C4237E3A07ADEB2 /* APIModels.swift in Sources */,
 				9965858B6B764EC41F6B5D91 /* BarcodeScannerView.swift in Sources */,
 				48D062E52FF6B6ABA80A0530 /* ContentView.swift in Sources */,
+				AE3A988ECD07A7EF71FC2F0E /* FamilyDetailView.swift in Sources */,
 				AE725DF552EB38992BE54531 /* HomeView.swift in Sources */,
 				9EDF2C0B57B54497E8568667 /* ImageInputView.swift in Sources */,
 				4F43313AF590E27614BCA298 /* ItemsView.swift in Sources */,
@@ -250,6 +257,7 @@
 				3EB4DD75382FF083EA7D8D0D /* LoginView.swift in Sources */,
 				B7CD6EECD729D25600DBDF31 /* NotificationScheduler.swift in Sources */,
 				3202AD1196ED17A974D0A0F3 /* OperationsHomeApp.swift in Sources */,
+				032909028DE27A3E2F725486 /* ProfileEditView.swift in Sources */,
 				80C4808C218464FAAE5B4E8F /* ProfileView.swift in Sources */,
 				26DCE168D2CF6BF4498CD8BE /* RemindersView.swift in Sources */,
 				A0518AD3514F8D2F85AFBA15 /* SpacesView.swift in Sources */,

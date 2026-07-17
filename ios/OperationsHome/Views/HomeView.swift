@@ -39,7 +39,11 @@ struct HomeView: View {
                             case .reminders:
                                 RemindersView(session: session, sync: sync)
                             case .profile:
-                                ProfileView(session: session)
+                                ProfileView(
+                                    session: session,
+                                    family: selectedFamily,
+                                    onFamilyUpdated: { await loadFamilies() }
+                                )
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -62,6 +66,11 @@ struct HomeView: View {
             return families.first?.name ?? "我的家庭"
         }
         return family.name
+    }
+
+    private var selectedFamily: FamilyDTO? {
+        guard let selectedFamilyId = session.selectedFamilyId else { return families.first }
+        return families.first(where: { $0.id == selectedFamilyId })
     }
 
     private var familyBar: some View {

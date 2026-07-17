@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ProfileView: View {
     @ObservedObject var session: SessionStore
+    var family: FamilyDTO?
+    var onFamilyUpdated: () async -> Void
+    @State private var isEditingProfile = false
 
     var body: some View {
         NavigationStack {
@@ -19,14 +22,28 @@ struct ProfileView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        profileHero
+                        Button {
+                            isEditingProfile = true
+                        } label: {
+                            profileHero
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("编辑个人资料")
 
                         VStack(spacing: 12) {
-                            ProfileInfoRow(
-                                icon: "person.fill",
-                                title: "昵称",
-                                value: session.user?.name ?? "家庭成员"
-                            )
+                            Button {
+                                isEditingProfile = true
+                            } label: {
+                                ProfileInfoRow(
+                                    icon: "person.fill",
+                                    title: "昵称",
+                                    value: session.user?.name ?? "家庭成员",
+                                    showsChevron: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("编辑个人资料")
+
                             ProfileInfoRow(
                                 icon: "iphone",
                                 title: "手机号",
@@ -41,23 +58,25 @@ struct ProfileView: View {
                         )
                         .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
 
-                        VStack(spacing: 12) {
-                            ProfileActionRow(
-                                icon: "house.fill",
-                                title: "家庭信息",
-                                subtitle: "查看家庭名称、邀请成员和成员权限"
-                            )
-                            ProfileActionRow(
-                                icon: "person.2.fill",
-                                title: "成员管理",
-                                subtitle: "创建人可以邀请或移除家庭成员"
-                            )
+                        if let family {
+                            VStack(spacing: 12) {
+                                familyLink(
+                                    family: family,
+                                    icon: "house.fill",
+                                    title: "家庭信息",
+                                    subtitle: "查看家庭名称、角色和成员"
+                                )
+                                familyLink(
+                                    family: family,
+                                    icon: "person.2.fill",
+                                    title: "成员管理",
+                                    subtitle: family.role == "owner" ? "邀请或移除家庭成员" : "查看家庭成员"
+                                )
+                            }
                         }
 
                         Button(role: .destructive) {
                             session.token = nil
-                            session.user = nil
-                            session.selectedFamilyId = nil
                         } label: {
                             HStack {
                                 Image(systemName: "rectangle.portrait.and.arrow.right")
@@ -84,30 +103,44 @@ struct ProfileView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $isEditingProfile) {
+                ProfileEditView(session: session)
+            }
         }
+    }
+
+    private func familyLink(family: FamilyDTO, icon: String, title: String, subtitle: String) -> some View {
+        NavigationLink {
+            FamilyDetailView(
+                session: session,
+                familyId: family.id,
+                initialFamily: family,
+                onFamilyUpdated: onFamilyUpdated
+            )
+        } label: {
+            ProfileActionRow(icon: icon, title: title, subtitle: subtitle)
+        }
+        .buttonStyle(.plain)
     }
 
     private var profileHero: some View {
         HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color(red: 0.86, green: 0.92, blue: 0.78))
-                    .frame(width: 76, height: 76)
-                Text(avatarText)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
-            }
+            avatar
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(session.user?.name ?? "家庭成员")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
-                Text("运营小家的家庭管理员")
+                Text(family?.role == "owner" ? "家庭创建人" : "家庭成员")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
+
+            Image(systemName: "pencil")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
         }
         .padding(18)
         .background(Color.white.opacity(0.84), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
@@ -116,6 +149,38 @@ struct ProfileView: View {
                 .stroke(Color.white.opacity(0.70), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let url = avatarURL {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    avatarFallback
+                }
+            }
+            .frame(width: 76, height: 76)
+            .clipShape(Circle())
+        } else {
+            avatarFallback
+        }
+    }
+
+    private var avatarFallback: some View {
+        Text(avatarText)
+            .font(.system(size: 28, weight: .bold, design: .rounded))
+            .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+            .frame(width: 76, height: 76)
+            .background(Color(red: 0.86, green: 0.92, blue: 0.78), in: Circle())
+    }
+
+    private var avatarURL: URL? {
+        guard let value = session.user?.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return URL(string: value)
     }
 
     private var avatarText: String {
@@ -128,6 +193,7 @@ private struct ProfileInfoRow: View {
     var icon: String
     var title: String
     var value: String
+    var showsChevron = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -144,6 +210,11 @@ private struct ProfileInfoRow: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 }
