@@ -505,6 +505,7 @@ private struct SpaceFormView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 24, weight: .semibold))
                     }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -514,6 +515,7 @@ private struct SpaceFormView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 24, weight: .semibold))
                     }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("保存")
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
                 }
