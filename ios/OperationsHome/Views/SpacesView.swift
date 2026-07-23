@@ -95,15 +95,19 @@ struct SpacesView: View {
                                         .buttonStyle(.plain)
 
                                         Menu {
-                                            Button("编辑空间", systemImage: "pencil") {
+                                            Button {
                                                 editingSpace = space
+                                            } label: {
+                                                Image(systemName: "pencil")
                                             }
-                                            .labelStyle(.iconOnly)
+                                            .accessibilityLabel("编辑空间")
 
-                                            Button("删除空间", systemImage: "trash", role: .destructive) {
+                                            Button(role: .destructive) {
                                                 deletingSpace = space
+                                            } label: {
+                                                Image(systemName: "trash")
                                             }
-                                            .labelStyle(.iconOnly)
+                                            .accessibilityLabel("删除空间")
                                         } label: {
                                             Image(systemName: "ellipsis")
                                                 .font(.system(size: 15, weight: .bold))
