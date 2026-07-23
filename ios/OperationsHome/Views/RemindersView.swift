@@ -313,11 +313,25 @@ struct ReminderFormView: View {
                                     Text("每周").tag(RepeatRule.weekly)
                                     Text("每月").tag(RepeatRule.monthly)
                                 }
+                                .pickerStyle(.segmented)
 
-                                DatePicker("提醒时间", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                                Divider()
+
+                                ReminderDatePickerRow(
+                                    title: "提醒时间",
+                                    systemImage: "clock",
+                                    selection: $reminderTime,
+                                    displayedComponents: .hourAndMinute
+                                )
 
                                 if repeatRule == .weekly {
-                                    Picker("重复日期", selection: $weeklyChoice) {
+                                    Divider()
+
+                                    ReminderRuleWheelPicker(
+                                        title: "重复日期",
+                                        systemImage: "calendar.badge.clock",
+                                        selection: $weeklyChoice
+                                    ) {
                                         ForEach(WeeklyRepeatChoice.allCases) { choice in
                                             Text(choice.title).tag(choice)
                                         }
@@ -325,18 +339,36 @@ struct ReminderFormView: View {
                                 }
 
                                 if repeatRule == .monthly {
-                                    Picker("每月日期", selection: $monthlyDay) {
+                                    Divider()
+
+                                    ReminderRuleWheelPicker(
+                                        title: "每月日期",
+                                        systemImage: "calendar",
+                                        selection: $monthlyDay
+                                    ) {
                                         ForEach(1...31, id: \.self) { day in
                                             Text("\(day)日").tag(day)
                                         }
                                     }
                                 }
                             } else {
-                                DatePicker("日期", selection: $reminderDate, displayedComponents: .date)
-                                DatePicker("时间", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                                ReminderDatePickerRow(
+                                    title: "提醒日期",
+                                    systemImage: "calendar",
+                                    selection: $reminderDate,
+                                    displayedComponents: .date
+                                )
+
+                                Divider()
+
+                                ReminderDatePickerRow(
+                                    title: "提醒时间",
+                                    systemImage: "clock",
+                                    selection: $reminderTime,
+                                    displayedComponents: .hourAndMinute
+                                )
                             }
                         }
-                        .environment(\.locale, Locale(identifier: "zh_CN"))
 
                         GlassSection(title: "备注") {
                             TextField("可选", text: $notes, axis: .vertical)
@@ -358,11 +390,25 @@ struct ReminderFormView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("保存")
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
                 }
             }
         }
@@ -495,6 +541,70 @@ struct ReminderFormView: View {
         next.hour = hour
         next.minute = minute
         return calendar.date(from: next) ?? now
+    }
+}
+
+private struct ReminderDatePickerRow: View {
+    var title: String
+    var systemImage: String
+    @Binding var selection: Date
+    var displayedComponents: DatePickerComponents
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ReminderFormRowIcon(systemImage: systemImage)
+
+            DatePicker(
+                title,
+                selection: $selection,
+                displayedComponents: displayedComponents
+            )
+            .font(.body.weight(.medium))
+            .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+        }
+        .frame(minHeight: 52)
+        .environment(\.locale, Locale(identifier: "zh_CN"))
+    }
+}
+
+private struct ReminderRuleWheelPicker<SelectionValue: Hashable, Content: View>: View {
+    var title: String
+    var systemImage: String
+    @Binding var selection: SelectionValue
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                ReminderFormRowIcon(systemImage: systemImage)
+
+                Text(title)
+                    .font(.body.weight(.medium))
+
+                Spacer()
+            }
+            .frame(minHeight: 44)
+
+            Picker(title, selection: $selection) {
+                content
+            }
+            .labelsHidden()
+            .pickerStyle(.wheel)
+            .frame(maxWidth: .infinity)
+            .frame(height: 132)
+            .clipped()
+        }
+    }
+}
+
+private struct ReminderFormRowIcon: View {
+    var systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Color(red: 0.50, green: 0.59, blue: 0.48))
+            .frame(width: 26)
     }
 }
 

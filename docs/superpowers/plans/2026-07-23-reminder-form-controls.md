@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Modify only `ios/OperationsHome/Views/RemindersView.swift`.
+- 运行时代码只修改 `ios/OperationsHome/Views/RemindersView.swift`；模拟器验证若发现控件问题，可同步修正本设计与计划文档。
 - Preserve existing reminder type switching, repeat values, date calculation, API, sync, and notification behavior.
 - Use `xmark.circle.fill` and `checkmark.circle.fill` at `24pt semibold`.
 - Use the existing application green and `GlassSection`.
@@ -79,7 +79,7 @@ if kind == .periodicTask {
 }
 ```
 
-Use a full-width menu row with a leading SF Symbol for weekly choice and monthly day. Add dividers only between visible rows.
+Use fixed-height wheel pickers with leading SF Symbol headers for weekly choice and monthly day. Add dividers only between visible rows.
 
 - [ ] **Step 3: Add local reusable rows**
 
@@ -105,7 +105,7 @@ private struct ReminderDatePickerRow: View {
 }
 ```
 
-The menu rows use the same icon, minimum height, label weight, trailing green value, and full-width alignment.
+The weekly and monthly wheel pickers use the same icon header, label weight, fixed height, and full-width alignment.
 
 - [ ] **Step 4: Replace toolbar text actions**
 
