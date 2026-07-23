@@ -92,7 +92,7 @@ struct ItemsView: View {
                                     Button(role: .destructive) {
                                         deletingItem = item
                                     } label: {
-                                        Image(systemName: "trash")
+                                        Image(systemName: "minus.circle.fill")
                                     }
                                     .accessibilityLabel("删除物品")
                                 }
