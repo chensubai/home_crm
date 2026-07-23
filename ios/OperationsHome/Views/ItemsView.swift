@@ -427,54 +427,150 @@ struct ItemFormView: View {
                             systemImage: "shippingbox"
                         )
 
-                        VStack(spacing: 12) {
-                            OnboardingTextField(title: "物品名称", placeholder: "例如：抽纸", text: $name, systemImage: "tag")
-                            GlassSection(title: "存放与状态") {
+                        GlassSection(title: "基础信息") {
+                            ItemFormTextRow(
+                                title: "物品名称",
+                                placeholder: "例如：抽纸",
+                                text: $name,
+                                systemImage: "tag"
+                            )
+
+                            Divider()
+
+                            ItemFormTextRow(
+                                title: "分类",
+                                placeholder: "例如：日用品",
+                                text: $category,
+                                systemImage: "folder"
+                            )
+                        }
+
+                        GlassSection(title: "存放与库存") {
+                            HStack(spacing: 12) {
+                                formRowIcon("cabinet")
+                                Text("存放位置")
+                                    .font(.body.weight(.medium))
+
+                                Spacer()
+
                                 Picker("存放位置", selection: $selectedSpaceId) {
                                     ForEach(spaces) { space in
                                         Text(space.name).tag(Optional(space.remoteId))
                                     }
                                 }
+                                .labelsHidden()
+                                .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                            }
+                            .frame(minHeight: 52)
+
+                            Divider()
+
+                            HStack(spacing: 12) {
+                                formRowIcon("circle.lefthalf.filled")
+                                Text("状态")
+                                    .font(.body.weight(.medium))
+
+                                Spacer()
+
                                 Picker("状态", selection: $status) {
                                     ForEach(ItemStatus.allCases) { status in
                                         Text(status.title).tag(status)
                                     }
                                 }
+                                .labelsHidden()
+                                .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                             }
-                            OnboardingTextField(title: "分类", placeholder: "例如：日用品", text: $category, systemImage: "folder")
-                        }
+                            .frame(minHeight: 52)
 
-                        GlassSection(title: "库存") {
-                            Stepper("数量 \(quantity)", value: $quantity, in: 0...9999)
-                                .font(.headline.weight(.semibold))
-                            OnboardingTextField(title: "单位", placeholder: "例如：个、包、瓶", text: $unit, systemImage: "number")
+                            Divider()
+
+                            HStack(spacing: 12) {
+                                formRowIcon("number")
+                                Text("数量")
+                                    .font(.body.weight(.medium))
+
+                                Spacer()
+
+                                Text("\(quantity)")
+                                    .font(.body.monospacedDigit().weight(.semibold))
+                                    .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+
+                                Stepper("", value: $quantity, in: 0...9999)
+                                    .labelsHidden()
+                            }
+                            .frame(minHeight: 52)
+
+                            Divider()
+
+                            ItemFormTextRow(
+                                title: "单位",
+                                placeholder: "例如：个、包、瓶",
+                                text: $unit,
+                                systemImage: "scalemass"
+                            )
                         }
 
                         GlassSection(title: "保质期与备注") {
-                            Toggle("设置保质期", isOn: $hasExpiry)
-                            if hasExpiry {
-                                DatePicker("保质期", selection: $expiresAt, displayedComponents: .date)
-                                    .environment(\.locale, Locale(identifier: "zh_CN"))
+                            HStack(spacing: 12) {
+                                formRowIcon("calendar")
+                                Toggle("设置保质期", isOn: $hasExpiry)
+                                    .font(.body.weight(.medium))
                             }
-                            OnboardingTextField(title: "备注", placeholder: "可选", text: $notes, systemImage: "note.text")
+                            .frame(minHeight: 52)
+
+                            if hasExpiry {
+                                Divider()
+
+                                HStack(spacing: 12) {
+                                    formRowIcon("calendar.badge.clock")
+                                    DatePicker("保质期", selection: $expiresAt, displayedComponents: .date)
+                                        .font(.body.weight(.medium))
+                                        .environment(\.locale, Locale(identifier: "zh_CN"))
+                                }
+                                .frame(minHeight: 52)
+                            }
+
+                            Divider()
+
+                            ItemFormTextRow(
+                                title: "备注",
+                                placeholder: "可选",
+                                text: $notes,
+                                systemImage: "note.text"
+                            )
                         }
 
-                        GlassSection(title: "条码") {
+                        GlassSection(title: "条码与图片") {
                             HStack(spacing: 10) {
-                                OnboardingTextField(title: "条码/二维码", placeholder: "扫码或手动输入", text: $barcode, systemImage: "barcode")
+                                ItemFormTextRow(
+                                    title: "条码/二维码",
+                                    placeholder: "扫码或手动输入",
+                                    text: $barcode,
+                                    systemImage: "barcode"
+                                )
+
                                 Button {
                                     showingScanner = true
                                 } label: {
                                     Image(systemName: "barcode.viewfinder")
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
-                                        .frame(width: 52, height: 52)
+                                        .frame(width: 44, height: 44)
+                                        .background(Color.white.opacity(0.9), in: Circle())
+                                        .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 1))
                                 }
-                                .buttonStyle(SoftSecondaryButtonStyle())
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("扫描条码")
                             }
-                        }
 
-                        GlassSection(title: "物品图片") {
+                            Divider()
+
+                            HStack(spacing: 12) {
+                                formRowIcon("photo")
+                                Text("物品图片")
+                                    .font(.body.weight(.medium))
+                            }
+
                             ImageInputView(imageData: $imageData, existingImageURL: existingImageURL)
                         }
 
@@ -493,11 +589,25 @@ struct ItemFormView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil || selectedSpaceId == nil)
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("保存")
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil || selectedSpaceId == nil)
                 }
             }
             .sheet(isPresented: $showingScanner) {
@@ -512,6 +622,13 @@ struct ItemFormView: View {
                 selectedSpaceId = initialSpaceId ?? spaces.first?.remoteId
             }
         }
+    }
+
+    private func formRowIcon(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Color(red: 0.50, green: 0.59, blue: 0.48))
+            .frame(width: 26)
     }
 
     private var existingImageURL: URL? {
@@ -550,6 +667,34 @@ struct ItemFormView: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+}
+
+private struct ItemFormTextRow: View {
+    var title: String
+    var placeholder: String
+    @Binding var text: String
+    var systemImage: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color(red: 0.50, green: 0.59, blue: 0.48))
+                .frame(width: 26)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                TextField(placeholder, text: $text)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.body.weight(.medium))
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     }
 }
 
