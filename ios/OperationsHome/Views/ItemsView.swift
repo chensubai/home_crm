@@ -89,9 +89,12 @@ struct ItemsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button("删除物品", role: .destructive) {
+                                    Button(role: .destructive) {
                                         deletingItem = item
+                                    } label: {
+                                        Image(systemName: "trash")
                                     }
+                                    .accessibilityLabel("删除物品")
                                 }
                         }
                     }
