@@ -98,9 +98,12 @@ struct SpacesView: View {
                                             Button("编辑空间", systemImage: "pencil") {
                                                 editingSpace = space
                                             }
+                                            .labelStyle(.iconOnly)
+
                                             Button("删除空间", systemImage: "trash", role: .destructive) {
                                                 deletingSpace = space
                                             }
+                                            .labelStyle(.iconOnly)
                                         } label: {
                                             Image(systemName: "ellipsis")
                                                 .font(.system(size: 15, weight: .bold))
@@ -454,11 +457,23 @@ private struct SpaceFormView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .accessibilityLabel("保存")
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
                 }
             }
         }

@@ -11,7 +11,8 @@
 ## Global Constraints
 
 - Modify only the shared space add/edit form.
-- Use `xmark` for cancel and `checkmark` for save.
+- Use `xmark.circle.fill` for cancel and `checkmark.circle.fill` for save.
+- Render both symbols at `24pt semibold`.
 - Display no visible button text.
 - Preserve the current save-disabled condition.
 - Preserve VoiceOver labels “取消” and “保存”.
@@ -38,7 +39,8 @@ Update the existing toolbar block to:
         Button {
             dismiss()
         } label: {
-            Image(systemName: "xmark")
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 24, weight: .semibold))
         }
         .accessibilityLabel("取消")
     }
@@ -46,7 +48,8 @@ Update the existing toolbar block to:
         Button {
             Task { await save() }
         } label: {
-            Image(systemName: "checkmark")
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24, weight: .semibold))
         }
         .accessibilityLabel("保存")
         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
@@ -73,8 +76,8 @@ Expected: `** BUILD SUCCEEDED **`.
 
 Launch the app in the iPhone 16 Pro simulator, open the space tab, tap the add button, and verify:
 
-- Left toolbar action shows only `xmark`.
-- Right toolbar action shows only `checkmark`.
+- Left toolbar action shows only `xmark.circle.fill`.
+- Right toolbar action shows only `checkmark.circle.fill`.
 - The checkmark is disabled until a space name is entered.
 - The xmark dismisses the form.
 
