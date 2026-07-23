@@ -64,14 +64,18 @@ struct ProfileView: View {
                                     family: family,
                                     icon: "house.fill",
                                     title: "家庭信息",
-                                    subtitle: "查看家庭名称、角色和成员"
+                                    subtitle: "查看家庭资料和成员",
+                                    mode: .settings
                                 )
-                                familyLink(
-                                    family: family,
-                                    icon: "person.2.fill",
-                                    title: "成员管理",
-                                    subtitle: family.role == "owner" ? "邀请或移除家庭成员" : "查看家庭成员"
-                                )
+                                if FamilyScreenPermissions.showsMemberManagementEntry(role: family.role) {
+                                    familyLink(
+                                        family: family,
+                                        icon: "person.2.fill",
+                                        title: "成员管理",
+                                        subtitle: "邀请或移除家庭成员",
+                                        mode: .memberManagement
+                                    )
+                                }
                             }
                         }
 
@@ -109,12 +113,19 @@ struct ProfileView: View {
         }
     }
 
-    private func familyLink(family: FamilyDTO, icon: String, title: String, subtitle: String) -> some View {
+    private func familyLink(
+        family: FamilyDTO,
+        icon: String,
+        title: String,
+        subtitle: String,
+        mode: FamilyDetailMode
+    ) -> some View {
         NavigationLink {
             FamilyDetailView(
                 session: session,
                 familyId: family.id,
                 initialFamily: family,
+                mode: mode,
                 onFamilyUpdated: onFamilyUpdated
             )
         } label: {

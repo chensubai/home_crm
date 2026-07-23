@@ -1,8 +1,29 @@
 import SwiftUI
 
+enum FamilyDetailMode: Equatable {
+    case settings
+    case memberManagement
+}
+
+enum FamilyScreenPermissions {
+    static func showsMemberManagementEntry(role: String?) -> Bool {
+        role == "owner"
+    }
+
+    static func canEditFamily(role: String?, mode: FamilyDetailMode) -> Bool {
+        role == "owner" && mode == .settings
+    }
+
+    static func canManageMembers(role: String?, mode: FamilyDetailMode) -> Bool {
+        role == "owner" && mode == .memberManagement
+    }
+}
+
 struct FamilyDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var session: SessionStore
     var familyId: Int
+    var mode: FamilyDetailMode
     var onFamilyUpdated: () async -> Void
     @State private var family: FamilyDTO?
     @State private var members: [FamilyMemberDTO] = []
@@ -16,10 +37,12 @@ struct FamilyDetailView: View {
         session: SessionStore,
         familyId: Int,
         initialFamily: FamilyDTO,
+        mode: FamilyDetailMode,
         onFamilyUpdated: @escaping () async -> Void
     ) {
         self._session = ObservedObject(wrappedValue: session)
         self.familyId = familyId
+        self.mode = mode
         self.onFamilyUpdated = onFamilyUpdated
         self._family = State(initialValue: initialFamily)
     }
@@ -32,18 +55,18 @@ struct FamilyDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     familyHeader
 
-                    GlassSection(title: "家庭资料") {
-                        detailRow(title: "家庭名称", value: family?.name ?? "加载中")
-                        Divider()
-                        detailRow(title: "我的角色", value: roleTitle)
-                        if let owner = members.first(where: { $0.role == "owner" }) {
+                    if mode == .settings {
+                        GlassSection(title: "家庭资料") {
+                            detailRow(title: "家庭名称", value: family?.name ?? "加载中")
                             Divider()
-                            detailRow(title: "创建人", value: owner.name)
+                            detailRow(title: "我的角色", value: roleTitle)
+                            if let owner = members.first(where: { $0.role == "owner" }) {
+                                Divider()
+                                detailRow(title: "创建人", value: owner.name)
+                            }
                         }
-                    }
 
-                    if isOwner {
-                        HStack(spacing: 12) {
+                        if canEditFamily {
                             Button {
                                 isEditingFamily = true
                             } label: {
@@ -52,37 +75,47 @@ struct FamilyDetailView: View {
                                     .frame(height: 48)
                             }
                             .buttonStyle(SoftSecondaryButtonStyle())
-
-                            Button {
-                                isInvitingMember = true
-                            } label: {
-                                Label("邀请成员", systemImage: "person.badge.plus")
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 48)
-                            }
-                            .buttonStyle(SoftSecondaryButtonStyle())
                         }
+                    } else if canManageMembers {
+                        Button {
+                            isInvitingMember = true
+                        } label: {
+                            Label("邀请成员", systemImage: "person.badge.plus")
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                        }
+                        .buttonStyle(SoftSecondaryButtonStyle())
                     }
 
-                    GlassSection(title: "家庭成员 · \(members.count)") {
-                        if isLoading && members.isEmpty {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 24)
-                        } else if members.isEmpty {
-                            Text("暂无成员")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 20)
-                        } else {
-                            ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                                memberRow(member)
-                                if index < members.count - 1 {
-                                    Divider()
+                    if mode == .settings || canManageMembers {
+                        GlassSection(title: "家庭成员 · \(members.count)") {
+                            if isLoading && members.isEmpty {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 24)
+                            } else if members.isEmpty {
+                                Text("暂无成员")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 20)
+                            } else {
+                                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+                                    memberRow(member)
+                                    if index < members.count - 1 {
+                                        Divider()
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        ContentUnavailableView(
+                            "无管理权限",
+                            systemImage: "lock.fill",
+                            description: Text("只有家庭创建人可以管理成员。")
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
                     }
 
                     if !message.isEmpty {
@@ -96,23 +129,37 @@ struct FamilyDetailView: View {
                 .padding(.bottom, 34)
             }
         }
-        .navigationTitle("家庭详情")
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left.circle.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                }
+                .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                .accessibilityLabel("返回")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Task { await load() }
                 } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .font(.system(size: 24, weight: .semibold))
                 }
+                .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                 .disabled(isLoading)
-                .accessibilityLabel("刷新家庭成员")
+                .accessibilityLabel(refreshAccessibilityLabel)
             }
         }
         .task { await load() }
         .sheet(isPresented: $isEditingFamily) {
-            if let family {
+            if canEditFamily, let family {
                 FamilyNameEditView(session: session, family: family) { updatedFamily in
                     self.family = updatedFamily
                     Task { await onFamilyUpdated() }
@@ -120,7 +167,9 @@ struct FamilyDetailView: View {
             }
         }
         .sheet(isPresented: $isInvitingMember) {
-            InviteMemberView(session: session, familyId: familyId)
+            if canManageMembers {
+                InviteMemberView(session: session, familyId: familyId)
+            }
         }
         .alert(
             "移除成员",
@@ -147,9 +196,25 @@ struct FamilyDetailView: View {
         isOwner ? "创建人" : "普通成员"
     }
 
+    private var canEditFamily: Bool {
+        FamilyScreenPermissions.canEditFamily(role: family?.role, mode: mode)
+    }
+
+    private var canManageMembers: Bool {
+        FamilyScreenPermissions.canManageMembers(role: family?.role, mode: mode)
+    }
+
+    private var navigationTitle: String {
+        mode == .settings ? "家庭设置" : "成员管理"
+    }
+
+    private var refreshAccessibilityLabel: String {
+        mode == .settings ? "刷新家庭设置" : "刷新成员列表"
+    }
+
     private var familyHeader: some View {
         HStack(spacing: 16) {
-            Image(systemName: "house.fill")
+            Image(systemName: mode == .settings ? "house.fill" : "person.2.fill")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
                 .frame(width: 58, height: 58)
@@ -159,10 +224,19 @@ struct FamilyDetailView: View {
                 Text(family?.name ?? "家庭")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
-                Text(isOwner ? "你可以管理家庭资料和成员" : "你可以查看家庭资料和成员")
+                Text(headerSubtitle)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var headerSubtitle: String {
+        switch mode {
+        case .settings:
+            return isOwner ? "管理家庭资料并查看成员" : "查看家庭资料和成员"
+        case .memberManagement:
+            return "邀请或移除家庭成员"
         }
     }
 
@@ -204,7 +278,7 @@ struct FamilyDetailView: View {
 
             Spacer()
 
-            if isOwner && member.role == "member" {
+            if canManageMembers && member.role == "member" {
                 Button(role: .destructive) {
                     removingMember = member
                 } label: {
@@ -236,7 +310,7 @@ struct FamilyDetailView: View {
     }
 
     private func remove(_ member: FamilyMemberDTO) async {
-        guard isOwner, let token = session.token else { return }
+        guard canManageMembers, let token = session.token else { return }
         defer { removingMember = nil }
 
         do {

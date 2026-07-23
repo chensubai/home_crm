@@ -67,4 +67,17 @@ final class APIModelsTests: XCTestCase {
             .create
         )
     }
+
+    func testFamilySettingsAndMemberManagementPermissionsStaySeparate() {
+        XCTAssertTrue(FamilyScreenPermissions.showsMemberManagementEntry(role: "owner"))
+        XCTAssertFalse(FamilyScreenPermissions.showsMemberManagementEntry(role: "member"))
+
+        XCTAssertTrue(FamilyScreenPermissions.canEditFamily(role: "owner", mode: .settings))
+        XCTAssertFalse(FamilyScreenPermissions.canEditFamily(role: "owner", mode: .memberManagement))
+        XCTAssertFalse(FamilyScreenPermissions.canEditFamily(role: "member", mode: .settings))
+
+        XCTAssertFalse(FamilyScreenPermissions.canManageMembers(role: "owner", mode: .settings))
+        XCTAssertTrue(FamilyScreenPermissions.canManageMembers(role: "owner", mode: .memberManagement))
+        XCTAssertFalse(FamilyScreenPermissions.canManageMembers(role: "member", mode: .memberManagement))
+    }
 }
