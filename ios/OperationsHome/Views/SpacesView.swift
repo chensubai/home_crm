@@ -94,28 +94,11 @@ struct SpacesView: View {
                                         }
                                         .buttonStyle(.plain)
 
-                                        Menu {
-                                            Button {
-                                                editingSpace = space
-                                            } label: {
-                                                Image(systemName: "pencil")
-                                            }
-                                            .accessibilityLabel("编辑空间")
-
-                                            Button(role: .destructive) {
-                                                deletingSpace = space
-                                            } label: {
-                                                Image(systemName: "trash")
-                                            }
-                                            .accessibilityLabel("删除空间")
-                                        } label: {
-                                            Image(systemName: "ellipsis")
-                                                .font(.system(size: 15, weight: .bold))
-                                                .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
-                                                .frame(width: 34, height: 34)
-                                                .background(.ultraThinMaterial, in: Circle())
+                                        CompactSpaceActions {
+                                            editingSpace = space
+                                        } onDelete: {
+                                            deletingSpace = space
                                         }
-                                        .accessibilityLabel("空间操作")
                                         .padding(16)
                                     }
                                 }
@@ -192,6 +175,61 @@ struct SpacesView: View {
             message = ""
         } catch {
             message = error.localizedDescription
+        }
+    }
+}
+
+private struct CompactSpaceActions: View {
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                .frame(width: 34, height: 34)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("空间操作")
+        .popover(
+            isPresented: $isPresented,
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: .top
+        ) {
+            HStack(spacing: 4) {
+                Button {
+                    isPresented = false
+                    onEdit()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("编辑空间")
+
+                Divider()
+                    .frame(height: 24)
+
+                Button(role: .destructive) {
+                    isPresented = false
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("删除空间")
+            }
+            .padding(.horizontal, 6)
+            .frame(width: 112, height: 52)
+            .presentationCompactAdaptation(.popover)
+            .presentationBackground(.ultraThinMaterial)
         }
     }
 }
