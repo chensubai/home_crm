@@ -284,11 +284,25 @@ private struct FamilyNameEditView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("保存")
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
                 }
             }
         }
