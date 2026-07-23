@@ -46,82 +46,175 @@ struct ItemsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !message.isEmpty {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
+        ZStack {
+            OnboardingBackground()
 
-                ForEach(items) { item in
-                    itemRow(item)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button("删除物品", role: .destructive) {
-                                deletingItem = item
-                            }
-                        }
-                }
-            }
-            .navigationTitle(spaceFilter?.name ?? "物品")
-            .navigationBarBackButtonHidden(spaceFilter != nil)
-            .toolbar {
-                if spaceFilter != nil {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                        .accessibilityLabel("返回")
-                    }
-                }
+            VStack(spacing: 0) {
+                pageHeader
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isAdding = true
-                    } label: {
-                        Image(systemName: "plus")
+                if items.isEmpty {
+                    emptyState
+                        .padding(.horizontal, 18)
+                        .padding(.top, 18)
+                    Spacer(minLength: 0)
+                } else {
+                    List {
+                        if !message.isEmpty {
+                            Text(message)
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(.red)
+                                .padding(14)
+                                .background(
+                                    Color.white.opacity(0.82),
+                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                )
+                                .listRowInsets(EdgeInsets(top: 6, leading: 18, bottom: 6, trailing: 18))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+
+                        ForEach(items) { item in
+                            itemRow(item)
+                                .padding(14)
+                                .background(
+                                    Color.white.opacity(0.84),
+                                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .stroke(Color.white.opacity(0.72), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.04), radius: 14, y: 8)
+                                .listRowInsets(EdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button("删除物品", role: .destructive) {
+                                        deletingItem = item
+                                    }
+                                }
+                        }
                     }
-                    .accessibilityLabel("添加物品")
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .contentMargins(.top, 6, for: .scrollContent)
                 }
             }
-            .sheet(isPresented: $isAdding) {
-                ItemFormView(session: session, sync: sync, initialSpaceId: spaceFilter?.remoteId)
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $isAdding) {
+            ItemFormView(session: session, sync: sync, initialSpaceId: spaceFilter?.remoteId)
+        }
+        .sheet(item: $editingItem) { item in
+            ItemFormView(session: session, sync: sync, item: item)
+        }
+        .alert(
+            "删除物品",
+            isPresented: Binding(
+                get: { deletingItem != nil },
+                set: { if !$0 { deletingItem = nil } }
+            ),
+            presenting: deletingItem
+        ) { item in
+            Button("删除", role: .destructive) {
+                Task { await delete(item) }
             }
-            .sheet(item: $editingItem) { item in
-                ItemFormView(session: session, sync: sync, item: item)
-            }
-            .alert(
-                "删除物品",
-                isPresented: Binding(
-                    get: { deletingItem != nil },
-                    set: { if !$0 { deletingItem = nil } }
-                ),
-                presenting: deletingItem
-            ) { item in
-                Button("删除", role: .destructive) {
-                    Task { await delete(item) }
-                }
-                Button("取消", role: .cancel) {}
-            } message: { item in
-                Text("确定删除“\(item.name)”吗？此操作无法恢复。")
-            }
+            Button("取消", role: .cancel) {}
+        } message: { item in
+            Text("确定删除“\(item.name)”吗？此操作无法恢复。")
         }
     }
 
+    private var pageHeader: some View {
+        HStack(spacing: 14) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .frame(width: 42, height: 42)
+                    .background(Color.white.opacity(0.86), in: Circle())
+                    .shadow(color: Color.black.opacity(0.06), radius: 14, y: 8)
+            }
+            .accessibilityLabel("返回")
+
+            VStack(spacing: 3) {
+                Text(spaceFilter?.name ?? "物品")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.16))
+                    .lineLimit(1)
+
+                Text(headerSubtitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+
+            Button {
+                isAdding = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .frame(width: 42, height: 42)
+                    .background(Color.white.opacity(0.86), in: Circle())
+                    .shadow(color: Color.black.opacity(0.06), radius: 14, y: 8)
+            }
+            .accessibilityLabel("添加物品")
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+    }
+
+    private var headerSubtitle: String {
+        let countText = "\(items.count) 类物品"
+        guard let detail = spaceFilter?.detail?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !detail.isEmpty else {
+            return countText
+        }
+        return "\(detail) · \(countText)"
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(Color(red: 0.32, green: 0.45, blue: 0.36))
+                .frame(width: 84, height: 84)
+                .background(Color.white.opacity(0.78), in: Circle())
+
+            Text("还没有物品")
+                .font(.headline.weight(.bold))
+
+            Text("这个储物空间目前是空的。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 66)
+        .padding(.horizontal, 18)
+        .background(
+            Color.white.opacity(0.62),
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+        )
+    }
+
     private func itemRow(_ item: ItemRecord) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Button {
                 editingItem = item
             } label: {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
                     itemImage(item)
 
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(item.name)
-                            .font(.headline)
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
 
                         HStack(spacing: 6) {
@@ -133,6 +226,7 @@ struct ItemsView: View {
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
 
                         if let spaceId = item.spaceId, let space = spacesById[spaceId] {
                             Text(space.name)
@@ -144,10 +238,11 @@ struct ItemsView: View {
 
                     Spacer(minLength: 8)
 
-                    VStack(alignment: .trailing, spacing: 8) {
+                    VStack(alignment: .trailing, spacing: 7) {
                         statusBadge(item.status)
                         Text(quantityText(for: item))
-                            .font(.subheadline.monospacedDigit().weight(.medium))
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
                             .lineLimit(1)
                     }
                 }
@@ -157,12 +252,18 @@ struct ItemsView: View {
 
             HStack {
                 Spacer()
+
                 Button {
                     startAdjustment(item, delta: -1)
                 } label: {
                     Image(systemName: "minus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, height: 36)
+                        .background(Color.white.opacity(0.9), in: Circle())
+                        .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 1))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 .disabled(item.quantity == 0 || adjustmentGate.isAdjusting(itemId: item.remoteId))
                 .accessibilityLabel("减少数量")
 
@@ -170,13 +271,16 @@ struct ItemsView: View {
                     startAdjustment(item, delta: 1)
                 } label: {
                     Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color(red: 0.30, green: 0.48, blue: 0.36), in: Circle())
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 .disabled(adjustmentGate.isAdjusting(itemId: item.remoteId))
                 .accessibilityLabel("增加数量")
             }
         }
-        .padding(.vertical, 4)
     }
 
     private func itemImage(_ item: ItemRecord) -> some View {
@@ -198,17 +302,28 @@ struct ItemsView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: 48, height: 48)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(width: 58, height: 58)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func statusBadge(_ status: ItemStatus) -> some View {
         Text(status.title)
-            .font(.caption.weight(.medium))
+            .font(.caption.weight(.bold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .foregroundStyle(status == .expired ? .red : .secondary)
-            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .foregroundStyle(statusColor(status))
+            .background(statusColor(status).opacity(0.10), in: Capsule())
+    }
+
+    private func statusColor(_ status: ItemStatus) -> Color {
+        switch status {
+        case .inUse:
+            Color(red: 0.30, green: 0.48, blue: 0.36)
+        case .idle:
+            .secondary
+        case .expired:
+            .red
+        }
     }
 
     private func quantityText(for item: ItemRecord) -> String {
