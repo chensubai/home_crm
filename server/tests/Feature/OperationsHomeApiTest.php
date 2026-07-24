@@ -368,6 +368,125 @@ class OperationsHomeApiTest extends TestCase
             ->count());
     }
 
+    public function test_family_member_can_create_and_resolve_an_idempotent_nfc_token(): void
+    {
+        config()->set('nfc.public_base_url', 'https://nfc.example.com');
+        [$user, $token] = $this->login('13800000040');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => 'NFC 家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '玄关柜'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $first = $this->withToken($token)
+            ->postJson("/api/spaces/{$spaceId}/nfc-token")
+            ->assertOk()
+            ->assertJsonPath('data.url', fn (string $url) => str_starts_with($url, 'https://nfc.example.com/nfc/'))
+            ->json('data');
+
+        $second = $this->withToken($token)
+            ->postJson("/api/spaces/{$spaceId}/nfc-token")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame($first['token'], $second['token']);
+        $this->assertSame(48, strlen($first['token']));
+
+        $this->withToken($token)
+            ->getJson("/api/nfc/{$first['token']}")
+            ->assertOk()
+            ->assertJsonPath('data.space_id', $spaceId)
+            ->assertJsonPath('data.family_id', $familyId)
+            ->assertJsonPath('data.space_name', '玄关柜');
+    }
+
+    public function test_nfc_token_resolution_rejects_outsiders_and_deleted_spaces(): void
+    {
+        [, $ownerToken] = $this->login('13800000041');
+        [, $outsiderToken] = $this->login('13800000042');
+        $familyId = $this->withToken($ownerToken)
+            ->postJson('/api/families', ['name' => '受保护家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($ownerToken)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '私有柜子'])
+            ->assertCreated()
+            ->json('data.id');
+        $nfcToken = $this->withToken($ownerToken)
+            ->postJson("/api/spaces/{$spaceId}/nfc-token")
+            ->assertOk()
+            ->json('data.token');
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($outsiderToken)
+            ->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.phone', '13800000042');
+        $this->withToken($outsiderToken)
+            ->postJson("/api/spaces/{$spaceId}/nfc-token")
+            ->assertForbidden();
+        $this->withToken($outsiderToken)
+            ->getJson("/api/nfc/{$nfcToken}")
+            ->assertForbidden();
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($ownerToken)->deleteJson("/api/spaces/{$spaceId}")->assertOk();
+        $this->withToken($ownerToken)->getJson("/api/nfc/{$nfcToken}")->assertNotFound();
+        $this->withToken($ownerToken)->getJson('/api/nfc/not-a-real-token')->assertNotFound();
+    }
+
+    public function test_nfc_token_url_is_null_until_https_domain_is_configured(): void
+    {
+        config()->set('nfc.public_base_url', null);
+        [, $token] = $this->login('13800000043');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '本地开发家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '本地柜子'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)
+            ->postJson("/api/spaces/{$spaceId}/nfc-token")
+            ->assertOk()
+            ->assertJsonPath('data.url', null)
+            ->assertJsonPath('data.token', fn (string $value) => strlen($value) === 48);
+    }
+
+    public function test_legacy_nfc_uid_is_globally_unique_across_families(): void
+    {
+        [, $token] = $this->login('13800000044');
+        $firstFamilyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '第一个家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $secondFamilyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '第二个家庭'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)
+            ->postJson('/api/spaces', [
+                'family_id' => $firstFamilyId,
+                'name' => '第一个空间',
+                'nfc_uid' => 'legacy-globally-unique',
+            ])
+            ->assertCreated();
+        $this->withToken($token)
+            ->postJson('/api/spaces', [
+                'family_id' => $secondFamilyId,
+                'name' => '第二个空间',
+                'nfc_uid' => 'legacy-globally-unique',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('nfc_uid');
+    }
+
     public function test_reminder_can_be_disabled_and_sync_keeps_state(): void
     {
         [, $token] = $this->login('13800000022');

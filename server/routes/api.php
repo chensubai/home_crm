@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FamilyController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\NfcController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReminderController;
 use App\Http\Controllers\SpaceController;
@@ -31,6 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/families/{family}/members/{member}', [FamilyController::class, 'removeMember']);
 
     Route::apiResource('/spaces', SpaceController::class)->except(['show']);
+    Route::post('/spaces/{space}/nfc-token', [NfcController::class, 'createToken']);
+    Route::get('/nfc/{token}', [NfcController::class, 'resolve']);
     Route::apiResource('/items', ItemController::class)->except(['show']);
     Route::post('/items/{item}/adjust', [ItemController::class, 'adjust']);
 

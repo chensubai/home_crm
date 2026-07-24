@@ -121,7 +121,6 @@ class SpaceController extends Controller
         }
 
         $sameUid = NfcTag::withTrashed()
-            ->where('family_id', $space->family_id)
             ->where('uid', $uid)
             ->first();
 
