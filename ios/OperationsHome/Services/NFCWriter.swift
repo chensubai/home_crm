@@ -162,6 +162,11 @@ final class NFCWriter: NSObject, NFCWriting, NFCNDEFReaderSessionDelegate {
     }
 
     func write(url: URL) async throws {
+        guard url.scheme?.lowercased() == "https",
+              let host = url.host,
+              !host.isEmpty else {
+            throw NFCWriterError.invalidURL
+        }
         guard isAvailable else {
             throw NFCWriterError.deviceUnavailable
         }

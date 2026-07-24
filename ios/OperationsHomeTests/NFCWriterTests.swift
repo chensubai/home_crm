@@ -24,6 +24,7 @@ private final class FakeNFCWriter: NFCWriting {
 private final class FakeNFCWriterSession: NFCWriterSession {
     var alertMessage = ""
     var connectionError: Error?
+    var onBegin: (() -> Void)?
     var onInvalidate: (() -> Void)?
     private(set) var beginCount = 0
     private(set) var restartPollingCount = 0
@@ -32,6 +33,7 @@ private final class FakeNFCWriterSession: NFCWriterSession {
 
     func begin() {
         beginCount += 1
+        onBegin?()
     }
 
     func restartPolling() {
@@ -140,6 +142,44 @@ final class NFCWriterTests: XCTestCase {
             try await writer.write(url: url)
         }
         XCTAssertEqual(session.beginCount, 0)
+    }
+
+    func testWriterRejectsNonHTTPSAndHostlessURLsBeforeCreatingSession() async {
+        let rejectedURLs = [
+            URL(string: "http://nfc.example.com/nfc/ABC123")!,
+            URL(string: "operationshome://nfc/ABC123")!,
+            URL(fileURLWithPath: "/tmp/nfc"),
+            URL(string: "https:/nfc/ABC123")!,
+            URL(string: "/nfc/ABC123")!
+        ]
+
+        for rejectedURL in rejectedURLs {
+            let session = FakeNFCWriterSession()
+            var sessionFactoryCount = 0
+            var writer: NFCWriter!
+            writer = NFCWriter(
+                availability: { true },
+                sessionFactory: { _ in
+                    sessionFactoryCount += 1
+                    return session
+                }
+            )
+            session.onBegin = {
+                DispatchQueue.main.async {
+                    writer.handleInvalidation(TestFailure.write, session: session)
+                }
+            }
+
+            await assertWriteError(.invalidURL) {
+                try await writer.write(url: rejectedURL)
+            }
+            XCTAssertEqual(
+                sessionFactoryCount,
+                0,
+                "Created a session for rejected URL: \(rejectedURL.absoluteString)"
+            )
+            XCTAssertEqual(session.beginCount, 0)
+        }
     }
 
     func testWriterRejectsSecondWriteWhileSessionIsActive() async {
@@ -254,15 +294,43 @@ final class NFCWriterTests: XCTestCase {
         tag.completeWrite(with: nil)
     }
 
-    func testWriteViewAcceptsRequiredDependencies() {
-        let writer = FakeNFCWriter()
+    func testWriteTaskOwnerKeepsLatestTaskAndCancelsItAfterRapidRestart() async {
+        let owner = NFCWriteTaskOwner()
+        let firstStarted = expectation(description: "first task started")
+        let firstCancelled = expectation(description: "first task cancelled")
+        let secondStarted = expectation(description: "second task started")
+        let secondCancelled = expectation(description: "second task cancelled")
 
-        _ = NFCWriteView(
-            spaceName: "客厅柜子",
-            url: url,
-            writer: writer,
-            onClose: {}
+        owner.start {
+            firstStarted.fulfill()
+            do {
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+            } catch {
+                firstCancelled.fulfill()
+            }
+        }
+        await fulfillment(of: [firstStarted], timeout: 1)
+
+        owner.start {
+            secondStarted.fulfill()
+            do {
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+            } catch {
+                secondCancelled.fulfill()
+            }
+        }
+        await fulfillment(
+            of: [firstCancelled, secondStarted],
+            timeout: 1,
+            enforceOrder: false
         )
+
+        XCTAssertTrue(owner.hasActiveTask)
+
+        owner.cancel()
+
+        await fulfillment(of: [secondCancelled], timeout: 1)
+        XCTAssertFalse(owner.hasActiveTask)
     }
 
     private func makeWriter(

@@ -1,13 +1,46 @@
 import SwiftUI
 
 @MainActor
+final class NFCWriteTaskOwner: ObservableObject {
+    private var task: Task<Void, Never>?
+    private var generation = 0
+
+    var hasActiveTask: Bool {
+        task != nil
+    }
+
+    func start(_ operation: @escaping @MainActor () async -> Void) {
+        generation &+= 1
+        let activeGeneration = generation
+
+        task?.cancel()
+        task = Task { [weak self] in
+            await operation()
+            self?.finish(generation: activeGeneration)
+        }
+    }
+
+    func cancel() {
+        generation &+= 1
+        let activeTask = task
+        task = nil
+        activeTask?.cancel()
+    }
+
+    private func finish(generation completedGeneration: Int) {
+        guard generation == completedGeneration else { return }
+        task = nil
+    }
+}
+
+@MainActor
 struct NFCWriteView: View {
     let spaceName: String
     let url: URL?
     let onClose: () -> Void
 
     @StateObject private var model: NFCWriteViewModel
-    @State private var writeTask: Task<Void, Never>?
+    @StateObject private var taskOwner: NFCWriteTaskOwner
     private let writerIsAvailable: Bool
 
     init(
@@ -23,6 +56,7 @@ struct NFCWriteView: View {
         self._model = StateObject(
             wrappedValue: NFCWriteViewModel(writer: writer)
         )
+        self._taskOwner = StateObject(wrappedValue: NFCWriteTaskOwner())
     }
 
     var body: some View {
@@ -79,7 +113,7 @@ struct NFCWriteView: View {
             }
         }
         .onDisappear {
-            writeTask?.cancel()
+            taskOwner.cancel()
         }
     }
 
@@ -154,15 +188,13 @@ struct NFCWriteView: View {
     }
 
     private func beginWrite() {
-        writeTask?.cancel()
-        writeTask = Task {
+        taskOwner.start {
             await model.write(url: url)
-            writeTask = nil
         }
     }
 
     private func close() {
-        writeTask?.cancel()
+        taskOwner.cancel()
         onClose()
     }
 }
