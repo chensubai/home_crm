@@ -55,10 +55,10 @@
 
 - `GET /api/spaces?family_id=1`
 - `POST /api/spaces`
-  - JSON body: `{ "family_id": 1, "name": "客厅柜子", "nfc_uid": "optional" }`
-  - 上传图片时使用 `multipart/form-data`，字段：`family_id`, `name`, `description`, `nfc_uid`, `image`。
+  - JSON body: `{ "family_id": 1, "name": "客厅柜子" }`
+  - 上传图片时使用 `multipart/form-data`，字段：`family_id`, `name`, `description`, `image`。
 - `PATCH /api/spaces/{id}`
-  - 可修改 `name`, `description`, `nfc_uid`，并用 `image` 上传或替换空间图片。
+  - 可修改 `name`, `description`，并用 `image` 上传或替换空间图片。
   - iOS 图片更新使用 `POST` + multipart 字段 `_method=PATCH`，兼容 PHP 对 multipart PATCH 的解析。
 - `DELETE /api/spaces/{id}`
   - 空间内仍有物品时返回 422，必须先移动或删除这些物品。
@@ -79,6 +79,22 @@
   - 数量调整在事务中加锁，最低为 0，并写入实际变动值到 `item_changes`。
 
 空间和物品的图片服务端上限为 10 MB，iOS 拍照或选图后会压缩到 5 MB 以内。私有空间的 `image_url` 为服务端动态生成的签名读取地址；没有图片时 `image_url` 为空，由 iOS 展示默认封面。
+
+## NFC 空间链接
+
+以下接口均需要 `Authorization: Bearer <token>`。NFC 链接 Token 只能由服务端生成，空间创建和更新接口传入 `nfc_uid` 会返回 422。
+
+- `POST /api/spaces/{space_id}/nfc-token`
+  - 为当前用户可访问的空间创建或复用一个 48 位随机链接 Token。
+  - returns: `{ "token": "48位随机字符串", "url": "https://example.com/nfc/{token}" }`。
+  - 当 `NFC_PUBLIC_BASE_URL` 未配置或不是有效的 HTTPS URL 时，`url` 为 `null`。
+  - 当前用户不属于该空间家庭时返回 403；空间不存在时返回 404。
+- `GET /api/nfc/{token}`
+  - returns: `space_id`, `family_id`, `space_name`。
+  - 当前用户不属于该 Token 关联空间的家庭时返回 403。
+  - Token 不存在、关联空间不存在或已删除时返回 404。
+
+`GET /.well-known/apple-app-site-association` 是公开的 iOS Universal Links 关联文件，响应只匹配 `/nfc/*` 路径。
 
 ## 提醒
 

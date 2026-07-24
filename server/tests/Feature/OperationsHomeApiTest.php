@@ -490,6 +490,18 @@ class OperationsHomeApiTest extends TestCase
         ]);
     }
 
+    public function test_apple_app_site_association_only_matches_nfc_links(): void
+    {
+        config()->set('nfc.ios_team_id', 'TEAM123456');
+        config()->set('nfc.ios_bundle_id', 'com.operationshome.OperationsHome');
+
+        $this->getJson('/.well-known/apple-app-site-association')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/json')
+            ->assertJsonPath('applinks.details.0.appIDs.0', 'TEAM123456.com.operationshome.OperationsHome')
+            ->assertJsonFragment(['/' => '/nfc/*']);
+    }
+
     public function test_reminder_can_be_disabled_and_sync_keeps_state(): void
     {
         [, $token] = $this->login('13800000022');

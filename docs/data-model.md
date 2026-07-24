@@ -16,7 +16,7 @@
 - `family_members`：家庭成员关系和 `owner/member` 角色；API 删除参数使用该表的 `id`。
 - `family_invites`：邀请码、可选手机号、创建人、到期和接受时间。
 - `storage_spaces`：柜子、抽屉、储物间等存放空间；图片直接保存在 `image_key`, `image_url`, `image_hash` 字段，不建独立图片表。
-- `nfc_tags`：空间绑定的 NFC UID。每个家庭内 UID 唯一；清空 UID 时软删除绑定，再次使用时可恢复。
+- `nfc_tags`：空间绑定的 48 位随机链接 Token，不是由用户录入的物理芯片 UID。Token 由服务端创建并全局唯一；每个空间最多关联一条记录，软删除后可恢复。
 - `items`：家庭物品，包含必填存放空间、分类、数量、单位、条码、保质期、状态、备注和图片字段。
 - `item_changes`：库存数量调整流水，记录变更前后数量、实际增减值、用户和原因。
 - `reminders`：重要日期、周期任务、物品过期提醒；`is_enabled` 控制启停，`repeat_value` 保存每周星期或每月日期号。
@@ -45,3 +45,15 @@
 - 库存快捷调整额外写入 `item_changes`，便于后续追踪家庭成员操作。
 - 同步载荷包含空间 `nfc_uid`、提醒 `repeat_value/is_enabled` 和业务表图片字段。
 - 服务端只接受当前已鉴权家庭内的同步记录，并以事务处理每个 push 批次，避免跨家庭覆盖和部分提交。
+
+## 部署
+
+为 iOS Universal Links 配置以下环境变量：
+
+```env
+NFC_PUBLIC_BASE_URL=https://example.com
+IOS_TEAM_ID=TEAM123456
+IOS_BUNDLE_ID=com.operationshome.OperationsHome
+```
+
+应用必须在根路径公开 `GET /.well-known/apple-app-site-association`，并通过 HTTPS 提供该响应。关联文件使用 `IOS_TEAM_ID` 和 `IOS_BUNDLE_ID` 组成 app ID，且仅声明 `/nfc/*` 深链接；`NFC_PUBLIC_BASE_URL` 只有有效 HTTPS 值时才会生成可写入 NFC 标签的链接 URL。

@@ -13,6 +13,27 @@ class NfcController extends Controller
 {
     use AuthorizesFamilyAccess;
 
+    public function association()
+    {
+        $appId = sprintf(
+            '%s.%s',
+            (string) config('nfc.ios_team_id'),
+            (string) config('nfc.ios_bundle_id')
+        );
+
+        return response()->json([
+            'applinks' => [
+                'details' => [[
+                    'appIDs' => [$appId],
+                    'components' => [[
+                        '/' => '/nfc/*',
+                        'comment' => '运营小家 NFC 空间链接',
+                    ]],
+                ]],
+            ],
+        ], 200, ['Content-Type' => 'application/json']);
+    }
+
     public function createToken(Request $request, StorageSpace $space)
     {
         $this->authorizeFamily($request->user(), $space->family_id);
