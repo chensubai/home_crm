@@ -22,6 +22,10 @@ return new class extends Migration
                     ->update(['space_id' => null]);
             });
 
+        Schema::whenTableDoesntHaveIndex('nfc_tags', 'nfc_tags_space_id_index', function (Blueprint $table): void {
+            $table->index('space_id', 'nfc_tags_space_id_index');
+        });
+
         Schema::table('nfc_tags', function (Blueprint $table): void {
             $table->unique('space_id', 'nfc_tags_space_id_unique');
         });
@@ -29,6 +33,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::whenTableDoesntHaveIndex('nfc_tags', 'nfc_tags_space_id_index', function (Blueprint $table): void {
+            $table->index('space_id', 'nfc_tags_space_id_index');
+        });
+
         Schema::table('nfc_tags', function (Blueprint $table): void {
             $table->dropUnique('nfc_tags_space_id_unique');
         });
