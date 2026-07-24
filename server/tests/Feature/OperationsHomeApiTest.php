@@ -484,6 +484,32 @@ class OperationsHomeApiTest extends TestCase
         }
     }
 
+    public function test_nfc_token_url_is_null_for_non_origin_https_public_base_urls(): void
+    {
+        [, $token] = $this->login('13800000046');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '非 Origin HTTPS 家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '非 Origin HTTPS 柜子'])
+            ->assertCreated()
+            ->json('data.id');
+
+        foreach ([
+            'https://example.com/foo',
+            'https://example.com?x=1',
+            'https://example.com#fragment',
+        ] as $baseUrl) {
+            config()->set('nfc.public_base_url', $baseUrl);
+
+            $this->withToken($token)
+                ->postJson("/api/spaces/{$spaceId}/nfc-token")
+                ->assertOk()
+                ->assertJsonPath('data.url', null);
+        }
+    }
+
     public function test_nfc_tag_database_allows_only_one_row_per_space_including_soft_deleted_rows(): void
     {
         [, $token] = $this->login('13800000044');

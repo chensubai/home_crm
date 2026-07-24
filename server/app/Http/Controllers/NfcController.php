@@ -72,6 +72,9 @@ class NfcController extends Controller
             && is_array($urlParts)
             && strtolower((string) ($urlParts['scheme'] ?? '')) === 'https'
             && ($urlParts['host'] ?? '') !== ''
+            && in_array($urlParts['path'] ?? '', ['', '/'], true)
+            && ! array_key_exists('query', $urlParts)
+            && ! array_key_exists('fragment', $urlParts)
             ? rtrim($baseUrl, '/')."/nfc/{$tag->uid}"
             : null;
 
