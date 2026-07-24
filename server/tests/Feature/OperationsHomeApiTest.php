@@ -6,6 +6,7 @@ use App\Models\Family;
 use App\Models\NfcTag;
 use App\Models\User;
 use App\Services\QiniuStorage;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
@@ -43,7 +44,6 @@ class OperationsHomeApiTest extends TestCase
             ->postJson('/api/spaces', [
                 'family_id' => $familyId,
                 'name' => '客厅柜子',
-                'nfc_uid' => 'nfc-demo-001',
             ])
             ->assertCreated()
             ->json('data.id');
@@ -248,7 +248,7 @@ class OperationsHomeApiTest extends TestCase
             ->assertOk();
     }
 
-    public function test_space_nfc_update_and_nonempty_delete_are_safe(): void
+    public function test_space_update_and_nonempty_delete_are_safe(): void
     {
         [, $token] = $this->login('13800000020');
         $familyId = $this->withToken($token)
@@ -259,7 +259,6 @@ class OperationsHomeApiTest extends TestCase
             ->postJson('/api/spaces', [
                 'family_id' => $familyId,
                 'name' => '原柜子',
-                'nfc_uid' => 'nfc-old',
             ])
             ->assertCreated()
             ->json('data.id');
@@ -276,9 +275,8 @@ class OperationsHomeApiTest extends TestCase
         $this->withToken($token)->patchJson("/api/spaces/{$spaceId}", [
             'name' => '更新后的柜子',
             'description' => '客厅北侧',
-            'nfc_uid' => 'nfc-updated',
         ])->assertOk()
-            ->assertJsonPath('data.nfc_uid', 'nfc-updated');
+            ->assertJsonPath('data.name', '更新后的柜子');
 
         $this->withToken($token)->deleteJson("/api/spaces/{$spaceId}")
             ->assertStatus(422)
@@ -333,39 +331,35 @@ class OperationsHomeApiTest extends TestCase
             ->assertJsonValidationErrors('space_id');
     }
 
-    public function test_reused_nfc_uid_keeps_only_one_active_tag_for_space(): void
+    public function test_space_crud_rejects_caller_chosen_nfc_uid(): void
     {
         [, $token] = $this->login('13800000023');
         $familyId = $this->withToken($token)
             ->postJson('/api/families', ['name' => 'NFC 重绑家庭'])
             ->assertCreated()
             ->json('data.id');
-        $targetSpaceId = $this->withToken($token)
+        $this->withToken($token)
             ->postJson('/api/spaces', [
                 'family_id' => $familyId,
-                'name' => '目标柜子',
-                'nfc_uid' => 'target-old',
-            ])->assertCreated()->json('data.id');
-        $sourceSpaceId = $this->withToken($token)
+                'name' => '不应绑定 NFC 的柜子',
+                'nfc_uid' => 'caller-chosen',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('nfc_uid');
+
+        $spaceId = $this->withToken($token)
             ->postJson('/api/spaces', [
                 'family_id' => $familyId,
-                'name' => '来源柜子',
-                'nfc_uid' => 'reusable',
-            ])->assertCreated()->json('data.id');
+                'name' => '普通柜子',
+            ])
+            ->assertCreated()
+            ->json('data.id');
 
-        $this->withToken($token)->patchJson("/api/spaces/{$sourceSpaceId}", ['nfc_uid' => null])
-            ->assertOk()
-            ->assertJsonPath('data.nfc_uid', null);
-        $this->withToken($token)->patchJson("/api/spaces/{$targetSpaceId}", ['nfc_uid' => 'reusable'])
-            ->assertOk()
-            ->assertJsonPath('data.nfc_uid', 'reusable');
-        $this->withToken($token)->patchJson("/api/spaces/{$targetSpaceId}", ['nfc_uid' => 'target-final'])
-            ->assertOk()
-            ->assertJsonPath('data.nfc_uid', 'target-final');
-
-        $this->assertSame(1, NfcTag::query()
-            ->where('space_id', $targetSpaceId)
-            ->count());
+        $this->withToken($token)
+            ->patchJson("/api/spaces/{$spaceId}", ['nfc_uid' => 'caller-chosen'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('nfc_uid');
+        $this->assertDatabaseMissing('nfc_tags', ['space_id' => $spaceId]);
     }
 
     public function test_family_member_can_create_and_resolve_an_idempotent_nfc_token(): void
@@ -394,6 +388,16 @@ class OperationsHomeApiTest extends TestCase
 
         $this->assertSame($first['token'], $second['token']);
         $this->assertSame(48, strlen($first['token']));
+
+        $tag = NfcTag::where('space_id', $spaceId)->firstOrFail();
+        $tag->delete();
+        $restored = $this->withToken($token)
+            ->postJson("/api/spaces/{$spaceId}/nfc-token")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame($first['token'], $restored['token']);
+        $this->assertDatabaseHas('nfc_tags', ['id' => $tag->id, 'deleted_at' => null]);
 
         $this->withToken($token)
             ->getJson("/api/nfc/{$first['token']}")
@@ -458,33 +462,32 @@ class OperationsHomeApiTest extends TestCase
             ->assertJsonPath('data.token', fn (string $value) => strlen($value) === 48);
     }
 
-    public function test_legacy_nfc_uid_is_globally_unique_across_families(): void
+    public function test_nfc_tag_database_allows_only_one_row_per_space_including_soft_deleted_rows(): void
     {
         [, $token] = $this->login('13800000044');
-        $firstFamilyId = $this->withToken($token)
-            ->postJson('/api/families', ['name' => '第一个家庭'])
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => 'NFC 唯一性家庭'])
             ->assertCreated()
             ->json('data.id');
-        $secondFamilyId = $this->withToken($token)
-            ->postJson('/api/families', ['name' => '第二个家庭'])
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '唯一标签柜子'])
             ->assertCreated()
             ->json('data.id');
 
-        $this->withToken($token)
-            ->postJson('/api/spaces', [
-                'family_id' => $firstFamilyId,
-                'name' => '第一个空间',
-                'nfc_uid' => 'legacy-globally-unique',
-            ])
-            ->assertCreated();
-        $this->withToken($token)
-            ->postJson('/api/spaces', [
-                'family_id' => $secondFamilyId,
-                'name' => '第二个空间',
-                'nfc_uid' => 'legacy-globally-unique',
-            ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('nfc_uid');
+        $tag = NfcTag::create([
+            'family_id' => $familyId,
+            'space_id' => $spaceId,
+            'uid' => str_repeat('A', 48),
+        ]);
+        $tag->delete();
+
+        $this->expectException(QueryException::class);
+
+        NfcTag::create([
+            'family_id' => $familyId,
+            'space_id' => $spaceId,
+            'uid' => str_repeat('B', 48),
+        ]);
     }
 
     public function test_reminder_can_be_disabled_and_sync_keeps_state(): void
