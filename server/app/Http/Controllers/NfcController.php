@@ -66,9 +66,13 @@ class NfcController extends Controller
             return $tag;
         });
 
-        $baseUrl = rtrim((string) config('nfc.public_base_url'), '/');
-        $url = str_starts_with($baseUrl, 'https://')
-            ? "{$baseUrl}/nfc/{$tag->uid}"
+        $baseUrl = (string) config('nfc.public_base_url');
+        $urlParts = parse_url($baseUrl);
+        $url = filter_var($baseUrl, FILTER_VALIDATE_URL)
+            && is_array($urlParts)
+            && strtolower((string) ($urlParts['scheme'] ?? '')) === 'https'
+            && ($urlParts['host'] ?? '') !== ''
+            ? rtrim($baseUrl, '/')."/nfc/{$tag->uid}"
             : null;
 
         return $this->ok(['token' => $tag->uid, 'url' => $url]);
