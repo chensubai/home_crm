@@ -82,13 +82,13 @@ struct ProfileView: View {
                         Button(role: .destructive) {
                             session.token = nil
                         } label: {
-                            HStack {
+                            HStack(spacing: 8) {
                                 Image(systemName: "rectangle.portrait.and.arrow.right")
                                     .font(.system(size: 17, weight: .semibold))
                                 Text("退出登录")
                                     .font(.headline.weight(.semibold))
-                                Spacer()
                             }
+                            .frame(maxWidth: .infinity)
                             .foregroundStyle(.red)
                             .padding(16)
                             .background(Color.white.opacity(0.84), in: RoundedRectangle(cornerRadius: 22, style: .continuous))

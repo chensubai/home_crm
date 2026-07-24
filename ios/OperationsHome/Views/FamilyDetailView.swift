@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum FamilyDetailMode: Equatable {
     case settings
@@ -408,6 +409,7 @@ private struct InviteMemberView: View {
     @State private var invite: FamilyInviteDTO?
     @State private var message = ""
     @State private var isSending = false
+    @State private var hasCopiedInvite = false
 
     var body: some View {
         NavigationStack {
@@ -442,11 +444,24 @@ private struct InviteMemberView: View {
 
                         if let invite {
                             GlassSection(title: "邀请码") {
-                                Text(invite.code)
-                                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
-                                    .frame(maxWidth: .infinity)
-                                    .textSelection(.enabled)
+                                ZStack {
+                                    Text(invite.code)
+                                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                                        .frame(maxWidth: .infinity)
+                                        .textSelection(.enabled)
+
+                                    Button {
+                                        copyInviteCode(invite.code)
+                                    } label: {
+                                        Image(systemName: hasCopiedInvite ? "checkmark.circle.fill" : "doc.on.doc.fill")
+                                            .font(.system(size: 22, weight: .semibold))
+                                            .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .accessibilityLabel(hasCopiedInvite ? "邀请码已复制" : "复制邀请码")
+                                }
                                 Text("有效期至 \(InviteDateFormatter.chineseDateTime.string(from: invite.expiresAt))")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
@@ -469,7 +484,14 @@ private struct InviteMemberView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("取消")
                 }
             }
         }
@@ -482,13 +504,22 @@ private struct InviteMemberView: View {
 
         do {
             let value = phone.trimmingCharacters(in: .whitespacesAndNewlines)
-            invite = try await APIClient(token: token).inviteMember(
+            let createdInvite = try await APIClient(token: token).inviteMember(
                 familyId: familyId,
                 phone: value.isEmpty ? nil : value
             )
+            invite = createdInvite
+            hasCopiedInvite = false
             message = ""
         } catch {
             message = error.localizedDescription
+        }
+    }
+
+    private func copyInviteCode(_ code: String) {
+        UIPasteboard.general.string = code
+        withAnimation(.easeInOut(duration: 0.2)) {
+            hasCopiedInvite = true
         }
     }
 }
