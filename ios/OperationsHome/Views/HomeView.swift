@@ -116,53 +116,68 @@ struct HomeView: View {
     }
 
     private var familyBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("家庭空间")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Picker("家庭", selection: Binding(
-                        get: { session.selectedFamilyId ?? families.first?.id ?? 0 },
-                        set: { session.selectedFamilyId = $0 == 0 ? nil : $0 }
-                    )) {
-                        ForEach(families) { family in
-                            Text(family.name).tag(family.id)
+        VStack(spacing: 8) {
+            ZStack {
+                Menu {
+                    ForEach(families) { family in
+                        Button(family.name) {
+                            session.selectedFamilyId = family.id
                         }
                     }
-                    .pickerStyle(.menu)
-                    .tint(Color(red: 0.16, green: 0.18, blue: 0.16))
-                }
-
-                Spacer()
-
-                Button {
-                    Task { await refresh() }
                 } label: {
-                    Image(systemName: sync.isSyncing ? "arrow.triangle.2.circlepath.circle" : "arrow.triangle.2.circlepath")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
-                        .frame(width: 38, height: 38)
-                        .background(Color.white.opacity(0.76), in: Circle())
+                    HStack(spacing: 5) {
+                        Text(selectedFamilyName)
+                            .font(.system(size: 17, weight: .semibold))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.16))
+                    .frame(maxWidth: .infinity)
                 }
-                .accessibilityLabel("刷新")
+                .padding(.horizontal, 48)
+                .accessibilityLabel("切换家庭")
+
+                HStack {
+                    Spacer()
+                    Button {
+                        Task { await refresh() }
+                    } label: {
+                        Image(systemName: sync.isSyncing ? "arrow.triangle.2.circlepath.circle" : "arrow.triangle.2.circlepath")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
+                            .frame(width: 38, height: 38)
+                            .background(.thinMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("刷新")
+                }
             }
+            .frame(height: 44)
 
             if !errorMessage.isEmpty {
-                Text(errorMessage).font(.caption).foregroundStyle(.red)
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity)
             }
 
             if let lastError = sync.lastError {
-                Text(lastError).font(.caption).foregroundStyle(.red)
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.82))
-                .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.78), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
         .padding(.horizontal, 16)
         .padding(.top, 6)
         .padding(.bottom, 8)
