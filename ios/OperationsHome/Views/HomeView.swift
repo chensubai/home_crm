@@ -15,14 +15,27 @@ func homeFamilyPhase(isLoading: Bool, didLoadSuccessfully: Bool, familyCount: In
     return isLoading ? .loading : .failed
 }
 
+func inviteCodeForSubmission(_ value: String) -> String? {
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    guard normalized.count == 8,
+          normalized.unicodeScalars.allSatisfy(allowed.contains) else {
+        return nil
+    }
+    return normalized
+}
+
 struct HomeView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
     @State private var families: [FamilyDTO] = []
     @State private var newFamilyName = ""
+    @State private var inviteCode = ""
     @State private var errorMessage = ""
     @State private var isLoadingFamilies = true
+    @State private var isCreatingFamily = false
+    @State private var isJoiningFamily = false
     @State private var didLoadFamiliesSuccessfully = false
     @State private var selectedTab: HomeTab = .spaces
     @Namespace private var tabAnimation
@@ -45,9 +58,13 @@ struct HomeView: View {
             case .create:
                 CreateFamilyView(
                     familyName: $newFamilyName,
+                    inviteCode: $inviteCode,
                     message: errorMessage,
                     isLoading: isLoadingFamilies,
+                    isCreating: isCreatingFamily,
+                    isJoining: isJoiningFamily,
                     onCreate: { Task { await createFamily() } },
+                    onJoin: { Task { await joinFamily() } },
                     onRefresh: { Task { await loadFamilies() } }
                 )
             case .content:
@@ -178,11 +195,34 @@ struct HomeView: View {
 
     private func createFamily() async {
         guard let token = session.token else { return }
+        isCreatingFamily = true
+        defer { isCreatingFamily = false }
+
         do {
             let family = try await APIClient(token: token).createFamily(name: newFamilyName)
             families.append(family)
             session.selectedFamilyId = family.id
             newFamilyName = ""
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func joinFamily() async {
+        guard let token = session.token,
+              let code = inviteCodeForSubmission(inviteCode) else {
+            return
+        }
+        isJoiningFamily = true
+        defer { isJoiningFamily = false }
+
+        do {
+            let family = try await APIClient(token: token).acceptInvite(code: code)
+            families = [family]
+            session.selectedFamilyId = family.id
+            inviteCode = ""
+            errorMessage = ""
             await refresh()
         } catch {
             errorMessage = error.localizedDescription
@@ -325,9 +365,13 @@ private struct FamilyLoadFailureView: View {
 
 private struct CreateFamilyView: View {
     @Binding var familyName: String
+    @Binding var inviteCode: String
     var message: String
     var isLoading: Bool
+    var isCreating: Bool
+    var isJoining: Bool
     var onCreate: () -> Void
+    var onJoin: () -> Void
     var onRefresh: () -> Void
 
     var body: some View {
@@ -341,10 +385,10 @@ private struct CreateFamilyView: View {
                             .padding(.top, 10)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("创建你的家庭空间")
+                            Text("开始你的家庭空间")
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.16))
-                            Text("给家起个名字，后面就能邀请成员一起管理柜子、物品和提醒。")
+                            Text("创建一个新家庭，或使用邀请码加入家人已有的空间。")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(.secondary)
                                 .lineSpacing(3)
@@ -362,12 +406,58 @@ private struct CreateFamilyView: View {
                         Button {
                             onCreate()
                         } label: {
-                            Label(isLoading ? "正在创建" : "创建家庭", systemImage: "plus")
+                            Label(isCreating ? "正在创建" : "创建家庭", systemImage: "plus")
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
                         }
                         .buttonStyle(PrimaryOnboardingButtonStyle())
-                        .disabled(familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                        .disabled(
+                            familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || isLoading
+                                || isCreating
+                                || isJoining
+                        )
+
+                        HStack(spacing: 12) {
+                            Divider()
+                            Text("已有邀请码")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .fixedSize()
+                            Divider()
+                        }
+                        .frame(height: 20)
+
+                        OnboardingTextField(
+                            title: "邀请码",
+                            placeholder: "输入 8 位邀请码",
+                            text: $inviteCode,
+                            systemImage: "person.badge.plus"
+                        )
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .submitLabel(.join)
+                        .onSubmit {
+                            if inviteCodeForSubmission(inviteCode) != nil {
+                                onJoin()
+                            }
+                        }
+
+                        Button {
+                            onJoin()
+                        } label: {
+                            Label(isJoining ? "正在加入" : "加入家庭", systemImage: "person.2.badge.plus")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                        }
+                        .buttonStyle(SoftSecondaryButtonStyle())
+                        .disabled(
+                            inviteCodeForSubmission(inviteCode) == nil
+                                || isLoading
+                                || isCreating
+                                || isJoining
+                        )
 
                         Button {
                             onRefresh()

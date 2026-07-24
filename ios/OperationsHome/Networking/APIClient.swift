@@ -134,6 +134,10 @@ struct APIClient {
         try await request("families/\(familyId)/invites", method: "POST", body: FamilyInviteRequest(phone: phone))
     }
 
+    func acceptInvite(code: String) async throws -> FamilyDTO {
+        try await request("invites/\(code)/accept", method: "POST")
+    }
+
     func removeMember(familyId: Int, memberId: Int) async throws {
         try await requestVoid("families/\(familyId)/members/\(memberId)", method: "DELETE")
     }

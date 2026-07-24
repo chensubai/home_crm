@@ -68,6 +68,12 @@ final class APIModelsTests: XCTestCase {
         )
     }
 
+    func testInviteCodeForSubmissionNormalizesAndValidatesEightCharacters() {
+        XCTAssertEqual(inviteCodeForSubmission(" ab12cd34 "), "AB12CD34")
+        XCTAssertNil(inviteCodeForSubmission("ABC1234"))
+        XCTAssertNil(inviteCodeForSubmission("        "))
+    }
+
     func testFamilySettingsAndMemberManagementPermissionsStaySeparate() {
         XCTAssertTrue(FamilyScreenPermissions.showsMemberManagementEntry(role: "owner"))
         XCTAssertFalse(FamilyScreenPermissions.showsMemberManagementEntry(role: "member"))
