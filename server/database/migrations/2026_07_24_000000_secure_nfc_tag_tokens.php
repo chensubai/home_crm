@@ -19,6 +19,7 @@ return new class extends Migration
         });
 
         Schema::table('nfc_tags', function (Blueprint $table): void {
+            $table->index('family_id', 'nfc_tags_family_id_index');
             $table->dropUnique('nfc_tags_family_id_uid_unique');
             $table->unique('uid', 'nfc_tags_uid_unique');
         });
@@ -28,7 +29,8 @@ return new class extends Migration
     {
         Schema::table('nfc_tags', function (Blueprint $table): void {
             $table->dropUnique('nfc_tags_uid_unique');
-            $table->unique(['family_id', 'uid']);
+            $table->unique(['family_id', 'uid'], 'nfc_tags_family_id_uid_unique');
+            $table->dropIndex('nfc_tags_family_id_index');
         });
     }
 };
