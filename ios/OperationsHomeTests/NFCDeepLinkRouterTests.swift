@@ -17,6 +17,15 @@ final class NFCDeepLinkRouterTests: XCTestCase {
         XCTAssertNil(router.token(from: URL(string: "https://nfc.example.com/items/1")!))
     }
 
+    func testDevelopmentLinkRequiresExactlyOneNonEmptyTokenSegment() {
+        let router = NFCDeepLinkRouter()
+
+        XCTAssertNil(router.token(from: URL(string: "operationshome://nfc/ABC123/extra")!))
+        XCTAssertNil(router.token(from: URL(string: "operationshome://nfc/")!))
+        XCTAssertNil(router.token(from: URL(string: "operationshome://nfc//ABC123")!))
+        XCTAssertNil(router.token(from: URL(string: "operationshome://nfc/ABC123/")!))
+    }
+
     func testPendingTokenSurvivesRouterRecreationUntilConsumed() {
         let suite = "NFCDeepLinkRouterTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

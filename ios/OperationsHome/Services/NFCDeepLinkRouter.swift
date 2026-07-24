@@ -16,9 +16,18 @@ final class NFCDeepLinkRouter: ObservableObject {
     }
 
     func token(from url: URL) -> String? {
+#if DEBUG
         if url.scheme == "operationshome", url.host == "nfc" {
-            return url.pathComponents.dropFirst().first?.nonEmpty
+            let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?.path ?? ""
+            let parts = path.components(separatedBy: "/")
+            guard parts.count == 2,
+                  parts[0].isEmpty,
+                  let token = parts[1].nonEmpty else {
+                return nil
+            }
+            return token
         }
+#endif
         guard url.scheme == "https" else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.count == 2, parts[0] == "nfc" else { return nil }
