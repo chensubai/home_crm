@@ -8,7 +8,8 @@ final class SyncEngine: ObservableObject {
 
     private let scheduler = NotificationScheduler()
 
-    func pull(familyId: Int, token: String, context: ModelContext) async {
+    @discardableResult
+    func pull(familyId: Int, token: String, context: ModelContext) async -> Bool {
         isSyncing = true
         defer { isSyncing = false }
 
@@ -20,8 +21,10 @@ final class SyncEngine: ObservableObject {
             try context.save()
             await rescheduleReminders(familyId: familyId, context: context)
             lastError = nil
+            return true
         } catch {
             lastError = error.localizedDescription
+            return false
         }
     }
 

@@ -114,6 +114,22 @@ enum SpaceNFCFlowState: Equatable {
     }
 }
 
+func spaceFormBlocksInteractiveDismiss(
+    isSaving: Bool,
+    nfcFlow: SpaceNFCFlowState
+) -> Bool {
+    if isSaving {
+        return true
+    }
+
+    switch nfcFlow {
+    case .requesting, .ready:
+        return true
+    case .idle, .failed:
+        return false
+    }
+}
+
 struct SpacesView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
@@ -678,6 +694,12 @@ private struct SpaceFormView: View {
                 }
             }
         }
+        .interactiveDismissDisabled(
+            spaceFormBlocksInteractiveDismiss(
+                isSaving: isSaving,
+                nfcFlow: nfcFlow
+            )
+        )
         .sheet(item: nfcPresentation) { presentation in
             NFCWriteView(
                 spaceName: presentation.spaceName,

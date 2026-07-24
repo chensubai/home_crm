@@ -140,6 +140,109 @@ final class NFCDeepLinkRouterTests: XCTestCase {
         )
     }
 
+    func testSyncFailureRetainsPendingTokenAndOffersExactRetry() {
+        let navigation = NFCNavigationDecision(familyId: 3, spaceId: 11)
+        let result = nfcNavigationCommitDecision(
+            navigation: navigation,
+            syncSucceeded: false,
+            targetIsReady: false,
+            resolvingToken: "token-a",
+            pendingToken: "token-a",
+            isCancelled: false
+        )
+
+        XCTAssertEqual(
+            result,
+            .retry(message: "网络不可用，请联网后重试。")
+        )
+        XCTAssertFalse(result.consumesToken)
+        XCTAssertNil(result.navigation)
+    }
+
+    func testNavigationMutationWaitsForReadyCurrentPostSyncDecision() {
+        let navigation = NFCNavigationDecision(familyId: 3, spaceId: 11)
+
+        XCTAssertEqual(
+            nfcNavigationCommitDecision(
+                navigation: navigation,
+                syncSucceeded: true,
+                targetIsReady: true,
+                resolvingToken: "token-a",
+                pendingToken: "token-b",
+                isCancelled: false
+            ),
+            .ignore
+        )
+        XCTAssertEqual(
+            nfcNavigationCommitDecision(
+                navigation: navigation,
+                syncSucceeded: true,
+                targetIsReady: false,
+                resolvingToken: "token-a",
+                pendingToken: "token-a",
+                isCancelled: false
+            ),
+            .retry(message: "网络不可用，请联网后重试。")
+        )
+
+        let ready = nfcNavigationCommitDecision(
+            navigation: navigation,
+            syncSucceeded: true,
+            targetIsReady: true,
+            resolvingToken: "token-a",
+            pendingToken: "token-a",
+            isCancelled: false
+        )
+        XCTAssertEqual(ready.navigation, navigation)
+        XCTAssertTrue(ready.consumesToken)
+    }
+
+    func testSpaceFormDismissalGateBlocksSaveAndNfcPreparation() {
+        let context = SpaceNFCContext(
+            spaceId: 11,
+            spaceName: "玄关柜",
+            dismissFormAfterClose: true
+        )
+        let presentation = NFCWritePresentation(
+            spaceId: 11,
+            spaceName: "玄关柜",
+            token: "secure-token",
+            url: URL(string: "https://nfc.example.com/nfc/secure-token"),
+            dismissFormAfterClose: true
+        )
+
+        XCTAssertTrue(
+            spaceFormBlocksInteractiveDismiss(
+                isSaving: true,
+                nfcFlow: .idle
+            )
+        )
+        XCTAssertTrue(
+            spaceFormBlocksInteractiveDismiss(
+                isSaving: false,
+                nfcFlow: .requesting(context)
+            )
+        )
+        XCTAssertTrue(
+            spaceFormBlocksInteractiveDismiss(
+                isSaving: false,
+                nfcFlow: .ready(presentation)
+            )
+        )
+        XCTAssertFalse(
+            spaceFormBlocksInteractiveDismiss(
+                isSaving: false,
+                nfcFlow: .failed(context, message: "服务暂时不可用")
+            )
+        )
+        XCTAssertFalse(
+            spaceFormBlocksInteractiveDismiss(
+                isSaving: false,
+                nfcFlow: .idle
+            )
+        )
+    }
+
     func testNewSpaceNfcFailureRetainsSavedSpaceForRetryOrClose() {
         let context = SpaceNFCContext(
             spaceId: 11,

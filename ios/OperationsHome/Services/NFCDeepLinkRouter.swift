@@ -73,10 +73,52 @@ func isCurrentNfcResolution(
     !isCancelled && pendingToken == resolvingToken
 }
 
+enum NFCNavigationCommitDecision: Equatable {
+    case navigate(NFCNavigationDecision)
+    case retry(message: String)
+    case ignore
+
+    var consumesToken: Bool {
+        if case .navigate = self {
+            return true
+        }
+        return false
+    }
+
+    var navigation: NFCNavigationDecision? {
+        if case let .navigate(decision) = self {
+            return decision
+        }
+        return nil
+    }
+}
+
+func nfcNavigationCommitDecision(
+    navigation: NFCNavigationDecision,
+    syncSucceeded: Bool,
+    targetIsReady: Bool,
+    resolvingToken: String,
+    pendingToken: String?,
+    isCancelled: Bool
+) -> NFCNavigationCommitDecision {
+    guard isCurrentNfcResolution(
+        resolvingToken: resolvingToken,
+        pendingToken: pendingToken,
+        isCancelled: isCancelled
+    ) else {
+        return .ignore
+    }
+
+    guard syncSucceeded, targetIsReady else {
+        return .retry(message: "网络不可用，请联网后重试。")
+    }
+
+    return .navigate(navigation)
+}
+
 @MainActor
 final class NFCDeepLinkRouter: ObservableObject {
     @Published private(set) var pendingToken: String?
-    @Published var requestedSpaceId: Int?
     @Published var message: String?
 
     private let defaults: UserDefaults

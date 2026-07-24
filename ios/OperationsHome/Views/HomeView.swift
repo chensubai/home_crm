@@ -315,7 +315,7 @@ struct HomeView: View {
             }
 
             if !families.contains(where: { $0.id == destination.familyId }) {
-                try await reloadFamilies(token: token)
+                let refreshedFamilies = try await client.families()
                 guard isCurrentNfcResolution(
                     resolvingToken: pendingToken,
                     pendingToken: router.pendingToken,
@@ -323,6 +323,8 @@ struct HomeView: View {
                 ) else {
                     return
                 }
+                families = refreshedFamilies
+                didLoadFamiliesSuccessfully = true
             }
 
             guard let decision = nfcNavigationDecision(
@@ -334,22 +336,35 @@ struct HomeView: View {
                 return
             }
 
-            session.selectedFamilyId = decision.familyId
-            selectedTab = .spaces
-            await sync.pull(
+            let syncSucceeded = await sync.pull(
                 familyId: decision.familyId,
                 token: token,
                 context: context
             )
-            guard isCurrentNfcResolution(
+            let targetIsReady = syncSucceeded && isActiveSpaceAvailable(
+                id: decision.spaceId,
+                familyId: decision.familyId
+            )
+
+            switch nfcNavigationCommitDecision(
+                navigation: decision,
+                syncSucceeded: syncSucceeded,
+                targetIsReady: targetIsReady,
                 resolvingToken: pendingToken,
                 pendingToken: router.pendingToken,
                 isCancelled: Task.isCancelled
-            ) else {
+            ) {
+            case let .navigate(navigation):
+                session.selectedFamilyId = navigation.familyId
+                selectedTab = .spaces
+                requestedSpaceId = navigation.spaceId
+                router.consumePendingToken()
+            case let .retry(message):
+                router.message = message
+                nfcAlertOffersRetry = true
+            case .ignore:
                 return
             }
-            requestedSpaceId = decision.spaceId
-            router.consumePendingToken()
         } catch {
             guard isCurrentNfcResolution(
                 resolvingToken: pendingToken,
@@ -365,6 +380,16 @@ struct HomeView: View {
                 router.consumePendingToken()
             }
         }
+    }
+
+    private func isActiveSpaceAvailable(id: Int, familyId: Int) -> Bool {
+        let descriptor = FetchDescriptor<SpaceRecord>(
+            predicate: #Predicate { $0.remoteId == id }
+        )
+        guard let space = try? context.fetch(descriptor).first else {
+            return false
+        }
+        return space.familyId == familyId && space.deletedAt == nil
     }
 }
 
