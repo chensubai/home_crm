@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct OperationsHomeApp: App {
     private let container: ModelContainer
+    @StateObject private var router = NFCDeepLinkRouter()
 
     init() {
         container = try! ModelContainer(
@@ -18,7 +19,7 @@ struct OperationsHomeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(router: router)
                 .modelContainer(container)
         }
     }

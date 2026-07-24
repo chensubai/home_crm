@@ -186,6 +186,14 @@ struct APIClient {
         try await requestVoid("spaces/\(id)", method: "DELETE")
     }
 
+    func nfcToken(spaceId: Int) async throws -> NFCTokenDTO {
+        try await request("spaces/\(spaceId)/nfc-token", method: "POST")
+    }
+
+    func resolveNfcToken(_ token: String) async throws -> NFCSpaceDestinationDTO {
+        try await request("nfc/\(token.urlPathValue)")
+    }
+
     func items(familyId: Int) async throws -> [ItemDTO] {
         try await request("items?family_id=\(familyId)")
     }
@@ -385,6 +393,10 @@ private extension String {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "+&=?")
         return addingPercentEncoding(withAllowedCharacters: allowed) ?? self
+    }
+
+    var urlPathValue: String {
+        addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? self
     }
 }
 

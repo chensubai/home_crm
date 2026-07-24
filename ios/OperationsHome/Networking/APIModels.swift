@@ -96,6 +96,23 @@ struct SpaceDTO: Codable, Identifiable {
     }
 }
 
+struct NFCTokenDTO: Codable {
+    let token: String
+    let url: URL?
+}
+
+struct NFCSpaceDestinationDTO: Codable {
+    let spaceId: Int
+    let familyId: Int
+    let spaceName: String
+
+    enum CodingKeys: String, CodingKey {
+        case spaceId = "space_id"
+        case familyId = "family_id"
+        case spaceName = "space_name"
+    }
+}
+
 struct ItemDTO: Codable, Identifiable {
     let id: Int
     let familyId: Int
