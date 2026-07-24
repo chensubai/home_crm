@@ -41,4 +41,129 @@ final class NFCDeepLinkRouterTests: XCTestCase {
         XCTAssertNil(restored.pendingToken)
         defaults.removePersistentDomain(forName: suite)
     }
+
+    func testNfcDestinationOnlyNavigatesInsideLoadedMemberships() {
+        let target = NFCSpaceDestinationDTO(
+            spaceId: 11,
+            familyId: 3,
+            spaceName: "玄关柜"
+        )
+
+        XCTAssertEqual(
+            nfcNavigationDecision(
+                destination: target,
+                availableFamilyIds: [3, 4]
+            ),
+            NFCNavigationDecision(familyId: 3, spaceId: 11)
+        )
+        XCTAssertNil(
+            nfcNavigationDecision(
+                destination: target,
+                availableFamilyIds: [4]
+            )
+        )
+    }
+
+    func testNfcResolutionFailureUsesStatusSpecificCopyAndTokenPolicy() {
+        XCTAssertEqual(
+            nfcResolutionFailureDecision(
+                for: APIError.server(statusCode: 403, message: "server copy")
+            ),
+            .discardToken(message: "你没有权限访问这个空间。")
+        )
+        XCTAssertEqual(
+            nfcResolutionFailureDecision(
+                for: APIError.server(statusCode: 404, message: "server copy")
+            ),
+            .discardToken(message: "该 NFC 贴纸已失效。")
+        )
+        XCTAssertEqual(
+            nfcResolutionFailureDecision(
+                for: APIError.server(statusCode: 500, message: "服务暂时不可用")
+            ),
+            .discardToken(message: "服务暂时不可用")
+        )
+        XCTAssertEqual(
+            nfcResolutionFailureDecision(for: URLError(.notConnectedToInternet)),
+            .retry(message: "网络不可用，请联网后重试。")
+        )
+    }
+
+    func testSpaceNavigationWaitsForTargetAndAvoidsDuplicatePushes() {
+        XCTAssertEqual(
+            spaceNavigationTransition(
+                path: [],
+                requestedSpaceId: 11,
+                availableSpaceIds: [10]
+            ),
+            SpaceNavigationTransition(path: [], consumesRequest: false)
+        )
+        XCTAssertEqual(
+            spaceNavigationTransition(
+                path: [],
+                requestedSpaceId: 11,
+                availableSpaceIds: [10, 11]
+            ),
+            SpaceNavigationTransition(path: [11], consumesRequest: true)
+        )
+        XCTAssertEqual(
+            spaceNavigationTransition(
+                path: [11],
+                requestedSpaceId: 11,
+                availableSpaceIds: [11]
+            ),
+            SpaceNavigationTransition(path: [11], consumesRequest: true)
+        )
+    }
+
+    func testOnlyCurrentUncancelledNfcResolutionCanMutateRoutingState() {
+        XCTAssertTrue(
+            isCurrentNfcResolution(
+                resolvingToken: "token-a",
+                pendingToken: "token-a",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            isCurrentNfcResolution(
+                resolvingToken: "token-a",
+                pendingToken: "token-b",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            isCurrentNfcResolution(
+                resolvingToken: "token-a",
+                pendingToken: "token-a",
+                isCancelled: true
+            )
+        )
+    }
+
+    func testNewSpaceNfcFailureRetainsSavedSpaceForRetryOrClose() {
+        let context = SpaceNFCContext(
+            spaceId: 11,
+            spaceName: "玄关柜",
+            dismissFormAfterClose: true
+        )
+        var state = SpaceNFCFlowState.requesting(context)
+
+        state.tokenRequestFailed(message: "服务暂时不可用")
+
+        XCTAssertEqual(state.context, context)
+        XCTAssertEqual(state.failureMessage, "服务暂时不可用")
+        XCTAssertTrue(state.canRetry)
+        XCTAssertTrue(state.shouldDismissFormAfterClose)
+
+        state.retry()
+        XCTAssertEqual(state, .requesting(context))
+
+        state.tokenRequestSucceeded(
+            token: "secure-token",
+            url: URL(string: "https://nfc.example.com/nfc/secure-token")
+        )
+        XCTAssertEqual(state.presentation?.spaceId, 11)
+        XCTAssertEqual(state.presentation?.token, "secure-token")
+        XCTAssertTrue(state.presentation?.dismissFormAfterClose == true)
+    }
 }

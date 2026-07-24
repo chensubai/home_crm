@@ -146,31 +146,40 @@ struct APIClient {
         try await request("spaces?family_id=\(familyId)")
     }
 
-    func createSpace(familyId: Int, name: String, description: String? = nil, nfcUid: String?, imageData: Data? = nil) async throws -> SpaceDTO {
+    func createSpace(familyId: Int, name: String, description: String? = nil, imageData: Data? = nil) async throws -> SpaceDTO {
         if let imageData {
-            var fields = [
-                "family_id": String(familyId),
-                "name": name
-            ]
-            if let description, !description.isEmpty { fields["description"] = description }
-            if let nfcUid, !nfcUid.isEmpty { fields["nfc_uid"] = nfcUid }
-            return try await requestMultipart("spaces", method: "POST", fields: fields, imageData: imageData)
+            return try await requestMultipart(
+                "spaces",
+                method: "POST",
+                fields: spaceCreateMultipartFields(
+                    familyId: familyId,
+                    name: name,
+                    description: description
+                ),
+                imageData: imageData
+            )
         }
 
-        return try await request("spaces", method: "POST", body: SpaceCreateRequest(familyId: familyId, name: name, description: description, nfcUid: nfcUid))
+        return try await request(
+            "spaces",
+            method: "POST",
+            body: spaceCreatePayload(
+                familyId: familyId,
+                name: name,
+                description: description
+            )
+        )
     }
 
-    func updateSpace(id: Int, name: String, description: String?, nfcUid: String?, imageData: Data? = nil) async throws -> SpaceDTO {
+    func updateSpace(id: Int, name: String, description: String?, imageData: Data? = nil) async throws -> SpaceDTO {
         if let imageData {
             return try await requestMultipart(
                 "spaces/\(id)",
                 method: "POST",
-                fields: [
-                    "_method": "PATCH",
-                    "name": name,
-                    "description": description ?? "",
-                    "nfc_uid": nfcUid ?? ""
-                ],
+                fields: spaceUpdateMultipartFields(
+                    name: name,
+                    description: description
+                ),
                 imageData: imageData
             )
         }
@@ -178,7 +187,7 @@ struct APIClient {
         return try await request(
             "spaces/\(id)",
             method: "PATCH",
-            body: spaceUpdatePayload(name: name, description: description, nfcUid: nfcUid)
+            body: spaceUpdatePayload(name: name, description: description)
         )
     }
 
@@ -271,11 +280,7 @@ struct APIClient {
         }
 
         guard (200..<300).contains(http.statusCode) else {
-            if let error = try? decoder.decode(APIErrorResponse.self, from: data) {
-                throw APIError.server(error.message)
-            }
-
-            throw APIError.server("请求失败：HTTP \(http.statusCode)")
+            throw apiError(statusCode: http.statusCode, data: data)
         }
 
         return try decoder.decode(APIEnvelope<T>.self, from: data).data
@@ -301,10 +306,7 @@ struct APIClient {
             throw APIError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            if let error = try? decoder.decode(APIErrorResponse.self, from: data) {
-                throw APIError.server(error.message)
-            }
-            throw APIError.server("请求失败：HTTP \(http.statusCode)")
+            throw apiError(statusCode: http.statusCode, data: data)
         }
     }
 
@@ -335,32 +337,44 @@ struct APIClient {
             throw APIError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            if let error = try? decoder.decode(APIErrorResponse.self, from: data) {
-                throw APIError.server(error.message)
-            }
-            throw APIError.server("请求失败：HTTP \(http.statusCode)")
+            throw apiError(statusCode: http.statusCode, data: data)
         }
 
         return try decoder.decode(APIEnvelope<T>.self, from: data).data
     }
 }
 
-enum APIError: LocalizedError {
+enum APIError: LocalizedError, Equatable {
     case invalidResponse
-    case server(String)
+    case server(statusCode: Int, message: String)
+
+    var statusCode: Int? {
+        switch self {
+        case .invalidResponse:
+            nil
+        case let .server(statusCode, _):
+            statusCode
+        }
+    }
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "服务器响应无效"
-        case let .server(message):
+        case let .server(_, message):
             return message
         }
     }
 }
 
-private struct APIErrorResponse: Decodable {
+struct APIErrorResponse: Decodable {
     let message: String
+}
+
+func apiError(statusCode: Int, data: Data) -> APIError {
+    let message = (try? JSONDecoder().decode(APIErrorResponse.self, from: data).message)
+        ?? "请求失败：HTTP \(statusCode)"
+    return .server(statusCode: statusCode, message: message)
 }
 
 private enum DateParser {
@@ -452,20 +466,6 @@ private struct ProfileUpdateRequest: Encodable {
     let name: String
 }
 
-private struct SpaceCreateRequest: Encodable {
-    let familyId: Int
-    let name: String
-    let description: String?
-    let nfcUid: String?
-
-    enum CodingKeys: String, CodingKey {
-        case familyId = "family_id"
-        case name
-        case description
-        case nfcUid = "nfc_uid"
-    }
-}
-
 private struct ItemAdjustRequest: Encodable {
     let delta: Int
     let reason: String?
@@ -500,10 +500,50 @@ enum EncodableValue: Encodable {
     }
 }
 
-func spaceUpdatePayload(name: String, description: String?, nfcUid: String?) -> [String: EncodableValue] {
+func spaceCreatePayload(
+    familyId: Int,
+    name: String,
+    description: String?
+) -> [String: EncodableValue] {
+    var payload: [String: EncodableValue] = [
+        "family_id": .int(familyId),
+        "name": .string(name)
+    ]
+    if let description {
+        payload["description"] = .string(description)
+    }
+    return payload
+}
+
+func spaceUpdatePayload(name: String, description: String?) -> [String: EncodableValue] {
     [
         "name": .string(name),
-        "description": description.map(EncodableValue.string) ?? .null,
-        "nfc_uid": nfcUid.map(EncodableValue.string) ?? .null
+        "description": description.map(EncodableValue.string) ?? .null
+    ]
+}
+
+func spaceCreateMultipartFields(
+    familyId: Int,
+    name: String,
+    description: String?
+) -> [String: String] {
+    var fields = [
+        "family_id": String(familyId),
+        "name": name
+    ]
+    if let description, !description.isEmpty {
+        fields["description"] = description
+    }
+    return fields
+}
+
+func spaceUpdateMultipartFields(
+    name: String,
+    description: String?
+) -> [String: String] {
+    [
+        "_method": "PATCH",
+        "name": name,
+        "description": description ?? ""
     ]
 }

@@ -29,6 +29,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
+    @ObservedObject var router: NFCDeepLinkRouter
     @State private var families: [FamilyDTO] = []
     @State private var newFamilyName = ""
     @State private var inviteCode = ""
@@ -38,6 +39,8 @@ struct HomeView: View {
     @State private var isJoiningFamily = false
     @State private var didLoadFamiliesSuccessfully = false
     @State private var selectedTab: HomeTab = .spaces
+    @State private var requestedSpaceId: Int?
+    @State private var nfcAlertOffersRetry = false
     @Namespace private var tabAnimation
 
     var body: some View {
@@ -77,7 +80,12 @@ struct HomeView: View {
                         Group {
                             switch selectedTab {
                             case .spaces:
-                                SpacesView(session: session, sync: sync, familyName: selectedFamilyName)
+                                SpacesView(
+                                    session: session,
+                                    sync: sync,
+                                    familyName: selectedFamilyName,
+                                    requestedSpaceId: $requestedSpaceId
+                                )
                             case .reminders:
                                 RemindersView(session: session, sync: sync)
                             case .profile:
@@ -99,7 +107,40 @@ struct HomeView: View {
                 }
             }
         }
-        .task { await loadFamilies() }
+        .task(id: router.pendingToken) {
+            if !didLoadFamiliesSuccessfully {
+                await loadFamilies()
+            }
+            await resolvePendingNfcLink()
+        }
+        .alert(
+            "NFC 贴纸",
+            isPresented: Binding(
+                get: { router.message != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        router.message = nil
+                        nfcAlertOffersRetry = false
+                    }
+                }
+            )
+        ) {
+            if nfcAlertOffersRetry {
+                Button("重试") {
+                    router.message = nil
+                    Task { await resolvePendingNfcLink() }
+                }
+                Button("稍后", role: .cancel) {
+                    router.message = nil
+                }
+            } else {
+                Button("知道了") {
+                    router.message = nil
+                }
+            }
+        } message: {
+            Text(router.message ?? "")
+        }
     }
 
     private var selectedFamilyName: String {
@@ -193,14 +234,7 @@ struct HomeView: View {
         defer { isLoadingFamilies = false }
 
         do {
-            families = try await APIClient(token: token).families()
-            didLoadFamiliesSuccessfully = true
-            if let selectedFamilyId = session.selectedFamilyId,
-               !families.contains(where: { $0.id == selectedFamilyId }) {
-                session.selectedFamilyId = families.first?.id
-            } else if session.selectedFamilyId == nil {
-                session.selectedFamilyId = families.first?.id
-            }
+            try await reloadFamilies(token: token)
             errorMessage = ""
             await refresh()
         } catch {
@@ -247,6 +281,90 @@ struct HomeView: View {
     private func refresh() async {
         guard let token = session.token, let familyId = session.selectedFamilyId else { return }
         await sync.pull(familyId: familyId, token: token, context: context)
+    }
+
+    private func reloadFamilies(token: String) async throws {
+        families = try await APIClient(token: token).families()
+        didLoadFamiliesSuccessfully = true
+        if let selectedFamilyId = session.selectedFamilyId,
+           !families.contains(where: { $0.id == selectedFamilyId }) {
+            session.selectedFamilyId = families.first?.id
+        } else if session.selectedFamilyId == nil {
+            session.selectedFamilyId = families.first?.id
+        }
+    }
+
+    private func resolvePendingNfcLink() async {
+        guard let token = session.token,
+              let pendingToken = router.pendingToken else {
+            return
+        }
+
+        router.message = nil
+        nfcAlertOffersRetry = false
+
+        do {
+            let client = APIClient(token: token)
+            let destination = try await client.resolveNfcToken(pendingToken)
+            guard isCurrentNfcResolution(
+                resolvingToken: pendingToken,
+                pendingToken: router.pendingToken,
+                isCancelled: Task.isCancelled
+            ) else {
+                return
+            }
+
+            if !families.contains(where: { $0.id == destination.familyId }) {
+                try await reloadFamilies(token: token)
+                guard isCurrentNfcResolution(
+                    resolvingToken: pendingToken,
+                    pendingToken: router.pendingToken,
+                    isCancelled: Task.isCancelled
+                ) else {
+                    return
+                }
+            }
+
+            guard let decision = nfcNavigationDecision(
+                destination: destination,
+                availableFamilyIds: Set(families.map(\.id))
+            ) else {
+                router.message = "你没有权限访问这个空间。"
+                router.consumePendingToken()
+                return
+            }
+
+            session.selectedFamilyId = decision.familyId
+            selectedTab = .spaces
+            await sync.pull(
+                familyId: decision.familyId,
+                token: token,
+                context: context
+            )
+            guard isCurrentNfcResolution(
+                resolvingToken: pendingToken,
+                pendingToken: router.pendingToken,
+                isCancelled: Task.isCancelled
+            ) else {
+                return
+            }
+            requestedSpaceId = decision.spaceId
+            router.consumePendingToken()
+        } catch {
+            guard isCurrentNfcResolution(
+                resolvingToken: pendingToken,
+                pendingToken: router.pendingToken,
+                isCancelled: Task.isCancelled
+            ) else {
+                return
+            }
+            let failure = nfcResolutionFailureDecision(for: error)
+            router.message = failure.message
+            nfcAlertOffersRetry = failure.offersRetry
+            if failure.consumesToken {
+                router.consumePendingToken()
+            }
+        }
     }
 }
 

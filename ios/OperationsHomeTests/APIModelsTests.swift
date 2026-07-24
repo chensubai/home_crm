@@ -32,16 +32,49 @@ final class APIModelsTests: XCTestCase {
         )
     }
 
-    func testSpaceUpdatePayloadSendsNullForClearedOptionalFields() throws {
-        let payload = spaceUpdatePayload(name: "客厅柜子", description: nil, nfcUid: nil)
-        let data = try JSONEncoder().encode(payload)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    func testSpaceWritePayloadsNeverSendNfcUid() throws {
+        let createData = try JSONEncoder().encode(
+            spaceCreatePayload(familyId: 3, name: "客厅柜子", description: nil)
+        )
+        let createObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: createData) as? [String: Any]
+        )
+        let updateData = try JSONEncoder().encode(
+            spaceUpdatePayload(name: "客厅柜子", description: nil)
+        )
+        let updateObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: updateData) as? [String: Any]
+        )
 
-        XCTAssertEqual(object["name"] as? String, "客厅柜子")
-        XCTAssertTrue(object.keys.contains("description"))
-        XCTAssertTrue(object["description"] is NSNull)
-        XCTAssertTrue(object.keys.contains("nfc_uid"))
-        XCTAssertTrue(object["nfc_uid"] is NSNull)
+        XCTAssertEqual(createObject["family_id"] as? Int, 3)
+        XCTAssertNil(createObject["nfc_uid"])
+        XCTAssertTrue(updateObject.keys.contains("description"))
+        XCTAssertTrue(updateObject["description"] is NSNull)
+        XCTAssertNil(updateObject["nfc_uid"])
+
+        XCTAssertNil(
+            spaceCreateMultipartFields(
+                familyId: 3,
+                name: "客厅柜子",
+                description: nil
+            )["nfc_uid"]
+        )
+        XCTAssertNil(
+            spaceUpdateMultipartFields(
+                name: "客厅柜子",
+                description: nil
+            )["nfc_uid"]
+        )
+    }
+
+    func testApiErrorPreservesHttpStatusAndServerMessage() {
+        let error = apiError(
+            statusCode: 403,
+            data: Data(#"{"message":"Forbidden by server"}"#.utf8)
+        )
+
+        XCTAssertEqual(error.statusCode, 403)
+        XCTAssertEqual(error.errorDescription, "Forbidden by server")
     }
 
     func testItemAdjustmentGateSerializesRequestsForTheSameItem() {

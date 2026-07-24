@@ -12,8 +12,7 @@ struct ContentView: View {
             if session.token == nil {
                 LoginView(session: session)
             } else {
-                HomeView(session: session, sync: sync)
-                    .environmentObject(router)
+                HomeView(session: session, sync: sync, router: router)
             }
         }
         .onOpenURL { router.handle($0) }

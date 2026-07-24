@@ -1,14 +1,129 @@
 import SwiftData
 import SwiftUI
 
+struct SpaceNavigationTransition: Equatable {
+    let path: [Int]
+    let consumesRequest: Bool
+}
+
+func spaceNavigationTransition(
+    path: [Int],
+    requestedSpaceId: Int?,
+    availableSpaceIds: Set<Int>
+) -> SpaceNavigationTransition {
+    guard let requestedSpaceId,
+          availableSpaceIds.contains(requestedSpaceId) else {
+        return SpaceNavigationTransition(
+            path: path,
+            consumesRequest: false
+        )
+    }
+
+    guard path.last != requestedSpaceId else {
+        return SpaceNavigationTransition(
+            path: path,
+            consumesRequest: true
+        )
+    }
+
+    return SpaceNavigationTransition(
+        path: path + [requestedSpaceId],
+        consumesRequest: true
+    )
+}
+
+struct SpaceNFCContext: Equatable {
+    let spaceId: Int
+    let spaceName: String
+    let dismissFormAfterClose: Bool
+}
+
+struct NFCWritePresentation: Equatable, Identifiable {
+    let spaceId: Int
+    let spaceName: String
+    let token: String
+    let url: URL?
+    let dismissFormAfterClose: Bool
+
+    var id: String { token }
+}
+
+enum SpaceNFCFlowState: Equatable {
+    case idle
+    case requesting(SpaceNFCContext)
+    case failed(SpaceNFCContext, message: String)
+    case ready(NFCWritePresentation)
+
+    var context: SpaceNFCContext? {
+        switch self {
+        case .idle:
+            nil
+        case let .requesting(context), let .failed(context, _):
+            context
+        case let .ready(presentation):
+            SpaceNFCContext(
+                spaceId: presentation.spaceId,
+                spaceName: presentation.spaceName,
+                dismissFormAfterClose: presentation.dismissFormAfterClose
+            )
+        }
+    }
+
+    var failureMessage: String? {
+        guard case let .failed(_, message) = self else { return nil }
+        return message
+    }
+
+    var canRetry: Bool {
+        if case .failed = self {
+            return true
+        }
+        return false
+    }
+
+    var shouldDismissFormAfterClose: Bool {
+        context?.dismissFormAfterClose == true
+    }
+
+    var presentation: NFCWritePresentation? {
+        guard case let .ready(presentation) = self else { return nil }
+        return presentation
+    }
+
+    mutating func tokenRequestFailed(message: String) {
+        guard let context else { return }
+        self = .failed(context, message: message)
+    }
+
+    mutating func retry() {
+        guard case let .failed(context, _) = self else { return }
+        self = .requesting(context)
+    }
+
+    mutating func tokenRequestSucceeded(token: String, url: URL?) {
+        guard let context else { return }
+        self = .ready(
+            NFCWritePresentation(
+                spaceId: context.spaceId,
+                spaceName: context.spaceName,
+                token: token,
+                url: url,
+                dismissFormAfterClose: context.dismissFormAfterClose
+            )
+        )
+    }
+}
+
 struct SpacesView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
     var familyName: String
+    @Binding var requestedSpaceId: Int?
 
     @Query private var allSpaces: [SpaceRecord]
     @Query private var allItems: [ItemRecord]
+    @State private var path: [Int] = []
     @State private var searchText = ""
     @State private var isAdding = false
     @State private var editingSpace: SpaceRecord?
@@ -35,7 +150,7 @@ struct SpacesView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 OnboardingBackground()
 
@@ -84,9 +199,7 @@ struct SpacesView: View {
                             LazyVGrid(columns: columns, spacing: 14) {
                                 ForEach(visibleSpaces) { space in
                                     ZStack(alignment: .topTrailing) {
-                                        NavigationLink {
-                                            ItemsView(session: session, sync: sync, spaceFilter: space)
-                                        } label: {
+                                        NavigationLink(value: space.remoteId) {
                                             SpaceCardView(
                                                 space: space,
                                                 itemTypeCount: itemTypeCount(for: space)
@@ -119,6 +232,15 @@ struct SpacesView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Int.self) { spaceId in
+                if let space = spaces.first(where: { $0.remoteId == spaceId }) {
+                    ItemsView(
+                        session: session,
+                        sync: sync,
+                        spaceFilter: space
+                    )
+                }
+            }
             .sheet(isPresented: $isAdding) {
                 SpaceFormView(session: session, sync: sync)
             }
@@ -140,6 +262,31 @@ struct SpacesView: View {
             } message: { _ in
                 Text("删除后无法恢复。空间内有物品时，需要先移动或删除物品。")
             }
+            .onAppear {
+                navigateToRequestedSpaceIfAvailable()
+            }
+            .onChange(of: requestedSpaceId) {
+                navigateToRequestedSpaceIfAvailable()
+            }
+            .onChange(of: spaces.map(\.remoteId)) {
+                navigateToRequestedSpaceIfAvailable()
+            }
+            .onChange(of: session.selectedFamilyId) {
+                path.removeAll()
+                navigateToRequestedSpaceIfAvailable()
+            }
+        }
+    }
+
+    private func navigateToRequestedSpaceIfAvailable() {
+        let transition = spaceNavigationTransition(
+            path: path,
+            requestedSpaceId: requestedSpaceId,
+            availableSpaceIds: Set(spaces.map(\.remoteId))
+        )
+        path = transition.path
+        if transition.consumesRequest {
+            requestedSpaceId = nil
         }
     }
 
@@ -448,8 +595,10 @@ private struct SpaceFormView: View {
     var space: SpaceRecord?
     @State private var name: String
     @State private var detail: String
-    @State private var nfcUid: String
     @State private var imageData: Data?
+    @State private var createdSpaceId: Int?
+    @State private var nfcFlow = SpaceNFCFlowState.idle
+    @State private var isSaving = false
     @State private var message = ""
 
     init(session: SessionStore, sync: SyncEngine, space: SpaceRecord? = nil) {
@@ -458,7 +607,6 @@ private struct SpaceFormView: View {
         self.space = space
         self._name = State(initialValue: space?.name ?? "")
         self._detail = State(initialValue: space?.detail ?? "")
-        self._nfcUid = State(initialValue: space?.nfcUid ?? "")
     }
 
     var body: some View {
@@ -477,11 +625,14 @@ private struct SpaceFormView: View {
                         VStack(spacing: 12) {
                             OnboardingTextField(title: "空间名称", placeholder: "例如：客厅柜子", text: $name, systemImage: "square.grid.2x2")
                             OnboardingTextField(title: "位置", placeholder: "例如：客厅", text: $detail, systemImage: "location")
-                            OnboardingTextField(title: "NFC UID", placeholder: "可选", text: $nfcUid, systemImage: "wave.3.right")
                         }
 
                         GlassSection(title: "空间图片") {
                             ImageInputView(imageData: $imageData, existingImageURL: existingImageURL)
+                        }
+
+                        GlassSection(title: "NFC 贴纸") {
+                            nfcSection
                         }
 
                         if !message.isEmpty {
@@ -507,6 +658,7 @@ private struct SpaceFormView: View {
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("取消")
+                    .disabled(isSaving || isRequestingNfc)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -517,9 +669,27 @@ private struct SpaceFormView: View {
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("保存")
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
+                    .disabled(
+                        isSaving
+                            || isRequestingNfc
+                            || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || session.selectedFamilyId == nil
+                    )
                 }
             }
+        }
+        .sheet(item: nfcPresentation) { presentation in
+            NFCWriteView(
+                spaceName: presentation.spaceName,
+                url: presentation.url,
+                writer: NFCWriter(),
+                onClose: {
+                    closeNfcFlow(
+                        dismissFormAfterClose: presentation.dismissFormAfterClose
+                    )
+                }
+            )
+            .interactiveDismissDisabled()
         }
     }
 
@@ -529,34 +699,201 @@ private struct SpaceFormView: View {
         return URL(string: value)
     }
 
+    @ViewBuilder
+    private var nfcSection: some View {
+        switch nfcFlow {
+        case .idle:
+            if let currentSpace {
+                Button {
+                    Task {
+                        await prepareNfc(
+                            SpaceNFCContext(
+                                spaceId: currentSpace.remoteId,
+                                spaceName: currentSpace.name,
+                                dismissFormAfterClose: false
+                            )
+                        )
+                    }
+                } label: {
+                    Label(
+                        currentSpace.nfcUid == nil
+                            ? "写入 NFC 贴纸"
+                            : "重新写入 NFC 贴纸",
+                        systemImage: "wave.3.right"
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.20, green: 0.48, blue: 0.30))
+            } else {
+                Label("保存后写入 NFC 贴纸", systemImage: "wave.3.right")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        case .requesting:
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("正在准备 NFC 贴纸")
+                    .font(.body.weight(.medium))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case let .failed(context, failureMessage):
+            VStack(alignment: .leading, spacing: 12) {
+                Text(failureMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await prepareNfc(context) }
+                    } label: {
+                        Label("重试", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0.20, green: 0.48, blue: 0.30))
+
+                    if context.dismissFormAfterClose {
+                        Button("完成") {
+                            closeNfcFlow(dismissFormAfterClose: true)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+        case .ready:
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("正在打开 NFC 写入")
+                    .font(.body.weight(.medium))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var currentSpace: SpaceRecord? {
+        if let space {
+            return space
+        }
+        guard let createdSpaceId else { return nil }
+        return fetchSpace(id: createdSpaceId)
+    }
+
+    private var isRequestingNfc: Bool {
+        if case .requesting = nfcFlow {
+            return true
+        }
+        return false
+    }
+
+    private var nfcPresentation: Binding<NFCWritePresentation?> {
+        Binding(
+            get: { nfcFlow.presentation },
+            set: { presentation in
+                if presentation == nil {
+                    nfcFlow = .idle
+                }
+            }
+        )
+    }
+
     private func save() async {
         guard let token = session.token, let familyId = session.selectedFamilyId else { return }
+        isSaving = true
+        defer { isSaving = false }
+
         do {
             let client = APIClient(token: token)
-            if let space {
+            if let currentSpace {
                 let dto = try await client.updateSpace(
-                    id: space.remoteId,
+                    id: currentSpace.remoteId,
                     name: name,
                     description: detail.isEmpty ? nil : detail,
-                    nfcUid: nfcUid.isEmpty ? nil : nfcUid,
                     imageData: imageData
                 )
-                apply(dto, to: space)
+                apply(dto, to: currentSpace)
+                try context.save()
+                await sync.pull(
+                    familyId: familyId,
+                    token: token,
+                    context: context
+                )
+
+                if space == nil {
+                    await prepareNfc(
+                        SpaceNFCContext(
+                            spaceId: dto.id,
+                            spaceName: dto.name,
+                            dismissFormAfterClose: true
+                        )
+                    )
+                } else {
+                    dismiss()
+                }
             } else {
                 let dto = try await client.createSpace(
                     familyId: familyId,
                     name: name,
                     description: detail.isEmpty ? nil : detail,
-                    nfcUid: nfcUid.isEmpty ? nil : nfcUid,
                     imageData: imageData
                 )
-                context.insert(makeSpace(from: dto))
+                let newSpace = makeSpace(from: dto)
+                context.insert(newSpace)
+                createdSpaceId = dto.id
+                try context.save()
+
+                await prepareNfc(
+                    SpaceNFCContext(
+                        spaceId: dto.id,
+                        spaceName: dto.name,
+                        dismissFormAfterClose: true
+                    )
+                )
             }
-            try context.save()
-            await sync.pull(familyId: familyId, token: token, context: context)
-            dismiss()
+            message = ""
         } catch {
             message = error.localizedDescription
+        }
+    }
+
+    private func prepareNfc(_ nfcContext: SpaceNFCContext) async {
+        guard let token = session.token else { return }
+        nfcFlow = .requesting(nfcContext)
+
+        do {
+            let nfc = try await APIClient(token: token).nfcToken(
+                spaceId: nfcContext.spaceId
+            )
+            guard let localSpace = fetchSpace(id: nfcContext.spaceId) else {
+                throw APIError.invalidResponse
+            }
+            localSpace.nfcUid = nfc.token
+            try context.save()
+            nfcFlow.tokenRequestSucceeded(token: nfc.token, url: nfc.url)
+
+            if let familyId = session.selectedFamilyId {
+                await sync.pull(
+                    familyId: familyId,
+                    token: token,
+                    context: context
+                )
+            }
+        } catch {
+            nfcFlow.tokenRequestFailed(message: error.localizedDescription)
+        }
+    }
+
+    private func fetchSpace(id: Int) -> SpaceRecord? {
+        let descriptor = FetchDescriptor<SpaceRecord>(
+            predicate: #Predicate { $0.remoteId == id }
+        )
+        return try? context.fetch(descriptor).first
+    }
+
+    private func closeNfcFlow(dismissFormAfterClose: Bool) {
+        nfcFlow = .idle
+        if dismissFormAfterClose {
+            dismiss()
         }
     }
 }
