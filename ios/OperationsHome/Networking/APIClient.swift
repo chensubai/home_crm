@@ -56,7 +56,10 @@ final class SessionStore: ObservableObject {
 }
 
 struct APIClient {
-    var baseURL = URL(string: "http://localhost:8080/api")!
+    static let configurationErrorMessage =
+        "未配置 API 服务地址，请在 Release 构建设置中设置 API_BASE_URL。"
+
+    var baseURL: URL?
     var token: String?
 
     private let decoder: JSONDecoder = {
@@ -83,8 +86,28 @@ struct APIClient {
         return encoder
     }()
 
-    init(baseURL: URL = URL(string: "http://localhost:8080/api")!, token: String? = nil) {
+    init(baseURL: URL, token: String? = nil) {
         self.baseURL = baseURL
+        self.token = token
+    }
+
+    init(token: String? = nil) {
+        self.init(
+            token: token,
+            infoDictionary: Bundle.main.infoDictionary ?? [:],
+            debugDefaultBaseURL: Self.debugDefaultBaseURL
+        )
+    }
+
+    init(
+        token: String? = nil,
+        infoDictionary: [String: Any],
+        debugDefaultBaseURL: URL?
+    ) {
+        baseURL = Self.configuredBaseURL(
+            infoDictionary: infoDictionary,
+            debugDefaultBaseURL: debugDefaultBaseURL
+        )
         self.token = token
     }
 
@@ -260,9 +283,7 @@ struct APIClient {
     }
 
     private func request<T: Decodable, B: Encodable>(_ path: String, method: String = "GET", body: B? = Optional<EmptyPayload>.none) async throws -> T {
-        guard let url = URL(string: baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + path) else {
-            throw URLError(.badURL)
-        }
+        let url = try endpointURL(path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -287,9 +308,7 @@ struct APIClient {
     }
 
     private func requestVoid<B: Encodable>(_ path: String, method: String, body: B? = Optional<EmptyPayload>.none) async throws {
-        guard let url = URL(string: baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + path) else {
-            throw URLError(.badURL)
-        }
+        let url = try endpointURL(path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -311,9 +330,7 @@ struct APIClient {
     }
 
     private func requestMultipart<T: Decodable>(_ path: String, method: String, fields: [String: String], fileFieldName: String = "image", imageData: Data) async throws -> T {
-        guard let url = URL(string: baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + path) else {
-            throw URLError(.badURL)
-        }
+        let url = try endpointURL(path)
 
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: url)
@@ -342,15 +359,51 @@ struct APIClient {
 
         return try decoder.decode(APIEnvelope<T>.self, from: data).data
     }
+
+    private func endpointURL(_ path: String) throws -> URL {
+        guard let baseURL else {
+            throw APIError.configuration(message: Self.configurationErrorMessage)
+        }
+        guard let url = URL(
+            string: baseURL.absoluteString
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + path
+        ) else {
+            throw URLError(.badURL)
+        }
+        return url
+    }
+
+    private static var debugDefaultBaseURL: URL? {
+#if DEBUG
+        URL(string: "http://localhost:8080/api")
+#else
+        nil
+#endif
+    }
+
+    private static func configuredBaseURL(
+        infoDictionary: [String: Any],
+        debugDefaultBaseURL: URL?
+    ) -> URL? {
+        guard let value = infoDictionary["APIBaseURL"] as? String,
+              let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host?.isEmpty == false else {
+            return debugDefaultBaseURL
+        }
+        return url
+    }
 }
 
 enum APIError: LocalizedError, Equatable {
+    case configuration(message: String)
     case invalidResponse
     case server(statusCode: Int, message: String)
 
     var statusCode: Int? {
         switch self {
-        case .invalidResponse:
+        case .configuration, .invalidResponse:
             nil
         case let .server(statusCode, _):
             statusCode
@@ -359,6 +412,8 @@ enum APIError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
+        case let .configuration(message):
+            return message
         case .invalidResponse:
             return "服务器响应无效"
         case let .server(_, message):

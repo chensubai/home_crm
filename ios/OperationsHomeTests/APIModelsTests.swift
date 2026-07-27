@@ -77,6 +77,62 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "Forbidden by server")
     }
 
+    func testApiClientReadsInfoPlistBaseURLAndKeepsExplicitInjection() {
+        let configured = APIClient(
+            token: "configured-token",
+            infoDictionary: ["APIBaseURL": "https://api.operationshome.example/api"],
+            debugDefaultBaseURL: URL(string: "http://localhost:8080/api")
+        )
+        let injected = APIClient(
+            baseURL: URL(string: "https://injected.example/api")!,
+            token: "injected-token"
+        )
+
+        XCTAssertEqual(
+            configured.baseURL,
+            URL(string: "https://api.operationshome.example/api")
+        )
+        XCTAssertEqual(configured.token, "configured-token")
+        XCTAssertEqual(injected.baseURL, URL(string: "https://injected.example/api"))
+        XCTAssertEqual(injected.token, "injected-token")
+    }
+
+    func testApiClientOnlyUsesLocalhostWhenDebugFallbackIsProvided() {
+        let debugClient = APIClient(
+            infoDictionary: [:],
+            debugDefaultBaseURL: URL(string: "http://localhost:8080/api")
+        )
+        let releaseClient = APIClient(
+            infoDictionary: [:],
+            debugDefaultBaseURL: nil
+        )
+
+        XCTAssertEqual(
+            debugClient.baseURL,
+            URL(string: "http://localhost:8080/api")
+        )
+        XCTAssertNil(releaseClient.baseURL)
+    }
+
+    func testMissingReleaseApiBaseURLFailsWithActionableMessage() async {
+        let client = APIClient(
+            infoDictionary: [:],
+            debugDefaultBaseURL: nil
+        )
+
+        do {
+            try await client.sendSms(phone: "13800000000")
+            XCTFail("Expected API configuration failure")
+        } catch {
+            XCTAssertEqual(
+                error as? APIError,
+                .configuration(
+                    message: "未配置 API 服务地址，请在 Release 构建设置中设置 API_BASE_URL。"
+                )
+            )
+        }
+    }
+
     func testItemAdjustmentGateSerializesRequestsForTheSameItem() {
         var gate = ItemAdjustmentGate()
 

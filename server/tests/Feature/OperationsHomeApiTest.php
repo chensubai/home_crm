@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Family;
 use App\Models\NfcTag;
+use App\Models\StorageSpace;
 use App\Models\User;
 use App\Services\QiniuStorage;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -387,7 +389,7 @@ class OperationsHomeApiTest extends TestCase
             ->json('data');
 
         $this->assertSame($first['token'], $second['token']);
-        $this->assertSame(48, strlen($first['token']));
+        $this->assertMatchesRegularExpression('/^oh_[A-Za-z0-9]{48}$/', $first['token']);
 
         $tag = NfcTag::where('space_id', $spaceId)->firstOrFail();
         $tag->delete();
@@ -459,7 +461,116 @@ class OperationsHomeApiTest extends TestCase
             ->postJson("/api/spaces/{$spaceId}/nfc-token")
             ->assertOk()
             ->assertJsonPath('data.url', null)
-            ->assertJsonPath('data.token', fn (string $value) => strlen($value) === 48);
+            ->assertJsonPath(
+                'data.token',
+                fn (string $value) => preg_match('/^oh_[A-Za-z0-9]{48}$/', $value) === 1
+            );
+    }
+
+    public function test_secure_nfc_token_migration_preserves_only_unique_canonical_tokens(): void
+    {
+        $spaceMigration = require database_path(
+            'migrations/2026_07_24_010000_enforce_one_nfc_tag_per_space.php'
+        );
+        $tokenMigration = require database_path(
+            'migrations/2026_07_24_000000_secure_nfc_tag_tokens.php'
+        );
+        $spaceMigration->down();
+        $tokenMigration->down();
+
+        $firstFamily = Family::create(['name' => '迁移家庭 A']);
+        $secondFamily = Family::create(['name' => '迁移家庭 B']);
+        $spaces = collect([
+            StorageSpace::create(['family_id' => $firstFamily->id, 'name' => '保留空间']),
+            StorageSpace::create(['family_id' => $firstFamily->id, 'name' => '旧格式空间']),
+            StorageSpace::create(['family_id' => $firstFamily->id, 'name' => '重复空间 A']),
+            StorageSpace::create(['family_id' => $secondFamily->id, 'name' => '重复空间 B']),
+        ]);
+        $canonicalToken = 'oh_'.str_repeat('A', 48);
+        $duplicateToken = 'oh_'.str_repeat('B', 48);
+
+        DB::table('nfc_tags')->insert([
+            [
+                'family_id' => $firstFamily->id,
+                'space_id' => $spaces[0]->id,
+                'uid' => $canonicalToken,
+            ],
+            [
+                'family_id' => $firstFamily->id,
+                'space_id' => $spaces[1]->id,
+                'uid' => 'legacy-manual-uid',
+            ],
+            [
+                'family_id' => $firstFamily->id,
+                'space_id' => $spaces[2]->id,
+                'uid' => $duplicateToken,
+            ],
+            [
+                'family_id' => $secondFamily->id,
+                'space_id' => $spaces[3]->id,
+                'uid' => $duplicateToken,
+            ],
+        ]);
+
+        $tokenMigration->up();
+        $spaceMigration->up();
+
+        $tokens = DB::table('nfc_tags')->orderBy('id')->pluck('uid')->all();
+        $this->assertSame($canonicalToken, $tokens[0]);
+        $this->assertNotSame('legacy-manual-uid', $tokens[1]);
+        $this->assertNotContains($duplicateToken, $tokens, true);
+        $this->assertCount(4, array_unique($tokens));
+        foreach ($tokens as $token) {
+            $this->assertMatchesRegularExpression('/^oh_[A-Za-z0-9]{48}$/', $token);
+        }
+    }
+
+    public function test_nfc_space_deduplication_handles_more_than_one_thousand_duplicate_groups(): void
+    {
+        $spaceMigration = require database_path(
+            'migrations/2026_07_24_010000_enforce_one_nfc_tag_per_space.php'
+        );
+        $spaceMigration->down();
+
+        $family = Family::create(['name' => '大批量迁移家庭']);
+        $spaceRows = [];
+        $tagRows = [];
+        for ($group = 1; $group <= 1001; $group++) {
+            $spaceId = 10_000 + $group;
+            $spaceRows[] = [
+                'id' => $spaceId,
+                'family_id' => $family->id,
+                'name' => "批量空间 {$group}",
+            ];
+            $tagRows[] = [
+                'family_id' => $family->id,
+                'space_id' => $spaceId,
+                'uid' => 'oh_'.str_pad((string) ($group * 2 - 1), 48, '0', STR_PAD_LEFT),
+            ];
+            $tagRows[] = [
+                'family_id' => $family->id,
+                'space_id' => $spaceId,
+                'uid' => 'oh_'.str_pad((string) ($group * 2), 48, '0', STR_PAD_LEFT),
+            ];
+        }
+        foreach (array_chunk($spaceRows, 250) as $chunk) {
+            DB::table('storage_spaces')->insert($chunk);
+        }
+        foreach (array_chunk($tagRows, 250) as $chunk) {
+            DB::table('nfc_tags')->insert($chunk);
+        }
+
+        $spaceMigration->up();
+
+        $duplicateGroups = DB::table('nfc_tags')
+            ->select('space_id')
+            ->whereNotNull('space_id')
+            ->groupBy('space_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->count();
+        $this->assertSame(0, $duplicateGroups);
+        $this->assertSame(1001, DB::table('nfc_tags')->whereNotNull('space_id')->count());
+        $this->assertSame(1001, DB::table('nfc_tags')->whereNull('space_id')->count());
     }
 
     public function test_nfc_token_url_is_null_for_malformed_https_public_base_urls(): void
@@ -500,6 +611,8 @@ class OperationsHomeApiTest extends TestCase
             'https://example.com/foo',
             'https://example.com?x=1',
             'https://example.com#fragment',
+            'https://user@example.com',
+            'https://user:secret@example.com',
         ] as $baseUrl) {
             config()->set('nfc.public_base_url', $baseUrl);
 

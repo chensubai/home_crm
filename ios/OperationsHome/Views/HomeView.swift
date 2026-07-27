@@ -304,67 +304,37 @@ struct HomeView: View {
         nfcAlertOffersRetry = false
 
         do {
-            let client = APIClient(token: token)
-            let destination = try await client.resolveNfcToken(pendingToken)
-            guard isCurrentNfcResolution(
-                resolvingToken: pendingToken,
-                pendingToken: router.pendingToken,
-                isCancelled: Task.isCancelled
-            ) else {
-                return
-            }
-
-            if !families.contains(where: { $0.id == destination.familyId }) {
-                let refreshedFamilies = try await client.families()
-                guard isCurrentNfcResolution(
-                    resolvingToken: pendingToken,
-                    pendingToken: router.pendingToken,
-                    isCancelled: Task.isCancelled
-                ) else {
-                    return
+            try await continuePendingNfcLink(
+                router: router,
+                authenticationToken: token,
+                families: families,
+                resolve: { pendingToken, authenticationToken in
+                    try await APIClient(token: authenticationToken)
+                        .resolveNfcToken(pendingToken)
+                },
+                reloadFamilies: { authenticationToken in
+                    try await APIClient(token: authenticationToken).families()
+                },
+                updateFamilies: { refreshedFamilies in
+                    families = refreshedFamilies
+                    didLoadFamiliesSuccessfully = true
+                },
+                sync: { familyId, authenticationToken in
+                    await sync.pull(
+                        familyId: familyId,
+                        token: authenticationToken,
+                        context: context
+                    )
+                },
+                targetIsReady: { spaceId, familyId in
+                    isActiveSpaceAvailable(id: spaceId, familyId: familyId)
+                },
+                navigate: { navigation in
+                    session.selectedFamilyId = navigation.familyId
+                    selectedTab = .spaces
+                    requestedSpaceId = navigation.spaceId
                 }
-                families = refreshedFamilies
-                didLoadFamiliesSuccessfully = true
-            }
-
-            guard let decision = nfcNavigationDecision(
-                destination: destination,
-                availableFamilyIds: Set(families.map(\.id))
-            ) else {
-                router.message = "你没有权限访问这个空间。"
-                router.consumePendingToken()
-                return
-            }
-
-            let syncSucceeded = await sync.pull(
-                familyId: decision.familyId,
-                token: token,
-                context: context
             )
-            let targetIsReady = syncSucceeded && isActiveSpaceAvailable(
-                id: decision.spaceId,
-                familyId: decision.familyId
-            )
-
-            switch nfcNavigationCommitDecision(
-                navigation: decision,
-                syncSucceeded: syncSucceeded,
-                targetIsReady: targetIsReady,
-                resolvingToken: pendingToken,
-                pendingToken: router.pendingToken,
-                isCancelled: Task.isCancelled
-            ) {
-            case let .navigate(navigation):
-                session.selectedFamilyId = navigation.familyId
-                selectedTab = .spaces
-                requestedSpaceId = navigation.spaceId
-                router.consumePendingToken()
-            case let .retry(message):
-                router.message = message
-                nfcAlertOffersRetry = true
-            case .ignore:
-                return
-            }
         } catch {
             guard isCurrentNfcResolution(
                 resolvingToken: pendingToken,
@@ -374,6 +344,12 @@ struct HomeView: View {
                 return
             }
             let failure = nfcResolutionFailureDecision(for: error)
+            if failure.requiresAuthentication {
+                router.message = nil
+                nfcAlertOffersRetry = false
+                session.token = nil
+                return
+            }
             router.message = failure.message
             nfcAlertOffersRetry = failure.offersRetry
             if failure.consumesToken {

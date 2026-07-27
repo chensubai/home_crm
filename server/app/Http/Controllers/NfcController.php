@@ -5,9 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\AuthorizesFamilyAccess;
 use App\Models\NfcTag;
 use App\Models\StorageSpace;
+use App\Support\NfcToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class NfcController extends Controller
 {
@@ -45,9 +45,9 @@ class NfcController extends Controller
                 ->latest('id')
                 ->first();
 
-            if (! $tag || ! preg_match('/^[A-Za-z0-9]{48}$/', $tag->uid)) {
+            if (! $tag || ! NfcToken::isCanonical($tag->uid)) {
                 do {
-                    $token = Str::random(48);
+                    $token = NfcToken::generate();
                 } while (NfcTag::withTrashed()->where('uid', $token)->exists());
 
                 $tag ??= new NfcTag([
@@ -73,6 +73,8 @@ class NfcController extends Controller
             && strtolower((string) ($urlParts['scheme'] ?? '')) === 'https'
             && ($urlParts['host'] ?? '') !== ''
             && in_array($urlParts['path'] ?? '', ['', '/'], true)
+            && ! array_key_exists('user', $urlParts)
+            && ! array_key_exists('pass', $urlParts)
             && ! array_key_exists('query', $urlParts)
             && ! array_key_exists('fragment', $urlParts)
             ? rtrim($baseUrl, '/')."/nfc/{$tag->uid}"

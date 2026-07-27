@@ -16,7 +16,7 @@
 - `family_members`：家庭成员关系和 `owner/member` 角色；API 删除参数使用该表的 `id`。
 - `family_invites`：邀请码、可选手机号、创建人、到期和接受时间。
 - `storage_spaces`：柜子、抽屉、储物间等存放空间；图片直接保存在 `image_key`, `image_url`, `image_hash` 字段，不建独立图片表。
-- `nfc_tags`：空间绑定的 48 位随机链接 Token，不是由用户录入的物理芯片 UID。Token 由服务端创建并全局唯一；每个空间最多关联一条记录，软删除后可恢复。
+- `nfc_tags`：空间绑定的 `oh_` 前缀加 48 位随机字符的链接 Token，不是由用户录入的物理芯片 UID。Token 由服务端创建并全局唯一；每个空间最多关联一条记录，软删除后可恢复。
 - `items`：家庭物品，包含必填存放空间、分类、数量、单位、条码、保质期、状态、备注和图片字段。
 - `item_changes`：库存数量调整流水，记录变更前后数量、实际增减值、用户和原因。
 - `reminders`：重要日期、周期任务、物品过期提醒；`is_enabled` 控制启停，`repeat_value` 保存每周星期或每月日期号。

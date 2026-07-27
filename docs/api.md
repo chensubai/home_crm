@@ -85,8 +85,8 @@
 以下接口均需要 `Authorization: Bearer <token>`。NFC 链接 Token 只能由服务端生成，空间创建和更新接口传入 `nfc_uid` 会返回 422。
 
 - `POST /api/spaces/{space_id}/nfc-token`
-  - 为当前用户可访问的空间创建或复用一个 48 位随机链接 Token。
-  - returns: `{ "token": "48位随机字符串", "url": "https://example.com/nfc/{token}" }`。
+  - 为当前用户可访问的空间创建或复用一个 `oh_` 前缀加 48 位随机字符的链接 Token。
+  - returns: `{ "token": "oh_<48位随机字符>", "url": "https://example.com/nfc/{token}" }`。
   - 当 `NFC_PUBLIC_BASE_URL` 未配置或不是有效的 HTTPS URL 时，`url` 为 `null`。
   - 当前用户不属于该空间家庭时返回 403；空间不存在时返回 404。
 - `GET /api/nfc/{token}`

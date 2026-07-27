@@ -20,11 +20,14 @@ func nfcNavigationDecision(
 
 enum NFCResolutionFailureDecision: Equatable {
     case discardToken(message: String)
+    case reauthenticate(message: String)
     case retry(message: String)
 
     var message: String {
         switch self {
-        case let .discardToken(message), let .retry(message):
+        case let .discardToken(message),
+             let .reauthenticate(message),
+             let .retry(message):
             message
         }
     }
@@ -42,6 +45,13 @@ enum NFCResolutionFailureDecision: Equatable {
         }
         return false
     }
+
+    var requiresAuthentication: Bool {
+        if case .reauthenticate = self {
+            return true
+        }
+        return false
+    }
 }
 
 func nfcResolutionFailureDecision(for error: Error) -> NFCResolutionFailureDecision {
@@ -51,18 +61,22 @@ func nfcResolutionFailureDecision(for error: Error) -> NFCResolutionFailureDecis
 
     if let apiError = error as? APIError {
         switch apiError {
+        case let .server(statusCode, _) where statusCode == 401:
+            return .reauthenticate(
+                message: "登录状态已失效，请重新登录后继续。"
+            )
         case let .server(statusCode, _) where statusCode == 403:
             return .discardToken(message: "你没有权限访问这个空间。")
         case let .server(statusCode, _) where statusCode == 404:
             return .discardToken(message: "该 NFC 贴纸已失效。")
         default:
-            return .discardToken(
+            return .retry(
                 message: apiError.errorDescription ?? "服务器响应无效"
             )
         }
     }
 
-    return .discardToken(message: error.localizedDescription)
+    return .retry(message: error.localizedDescription)
 }
 
 func isCurrentNfcResolution(
@@ -114,6 +128,89 @@ func nfcNavigationCommitDecision(
     }
 
     return .navigate(navigation)
+}
+
+private enum NFCDeepLinkContinuationError: LocalizedError {
+    case retry(message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .retry(message):
+            message
+        }
+    }
+}
+
+@MainActor
+func continuePendingNfcLink(
+    router: NFCDeepLinkRouter,
+    authenticationToken: String,
+    families: [FamilyDTO],
+    resolve: (String, String) async throws -> NFCSpaceDestinationDTO,
+    reloadFamilies: (String) async throws -> [FamilyDTO],
+    updateFamilies: ([FamilyDTO]) -> Void,
+    sync: (Int, String) async -> Bool,
+    targetIsReady: (Int, Int) -> Bool,
+    navigate: (NFCNavigationDecision) -> Void
+) async throws {
+    guard let pendingToken = router.pendingToken else {
+        return
+    }
+
+    func isCurrent() -> Bool {
+        isCurrentNfcResolution(
+            resolvingToken: pendingToken,
+            pendingToken: router.pendingToken,
+            isCancelled: Task.isCancelled
+        )
+    }
+
+    let destination = try await resolve(pendingToken, authenticationToken)
+    guard isCurrent() else {
+        return
+    }
+
+    var availableFamilies = families
+    if !availableFamilies.contains(where: { $0.id == destination.familyId }) {
+        availableFamilies = try await reloadFamilies(authenticationToken)
+        guard isCurrent() else {
+            return
+        }
+        updateFamilies(availableFamilies)
+    }
+
+    guard let navigation = nfcNavigationDecision(
+        destination: destination,
+        availableFamilyIds: Set(availableFamilies.map(\.id))
+    ) else {
+        throw APIError.server(
+            statusCode: 403,
+            message: "你没有权限访问这个空间。"
+        )
+    }
+
+    let syncSucceeded = await sync(navigation.familyId, authenticationToken)
+    let ready = syncSucceeded && targetIsReady(
+        navigation.spaceId,
+        navigation.familyId
+    )
+
+    switch nfcNavigationCommitDecision(
+        navigation: navigation,
+        syncSucceeded: syncSucceeded,
+        targetIsReady: ready,
+        resolvingToken: pendingToken,
+        pendingToken: router.pendingToken,
+        isCancelled: Task.isCancelled
+    ) {
+    case let .navigate(decision):
+        navigate(decision)
+        router.consumePendingToken()
+    case let .retry(message):
+        throw NFCDeepLinkContinuationError.retry(message: message)
+    case .ignore:
+        return
+    }
 }
 
 @MainActor

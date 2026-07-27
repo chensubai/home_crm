@@ -42,6 +42,73 @@ final class NFCDeepLinkRouterTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
     }
 
+    func testPersistedPendingTokenContinuesAfterAuthenticationThroughSyncAndNavigation() async throws {
+        let suite = "NFCDeepLinkContinuationTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        var incoming: NFCDeepLinkRouter? = NFCDeepLinkRouter(defaults: defaults)
+        XCTAssertTrue(
+            incoming?.handle(URL(string: "operationshome://nfc/persisted-token")!) == true
+        )
+        incoming = nil
+
+        let restored = NFCDeepLinkRouter(defaults: defaults)
+        var events: [String] = []
+        var loadedFamilies: [FamilyDTO] = []
+        var navigation: NFCNavigationDecision?
+
+        try await continuePendingNfcLink(
+            router: restored,
+            authenticationToken: "authenticated-session",
+            families: [],
+            resolve: { pendingToken, authenticationToken in
+                events.append("resolve:\(pendingToken):\(authenticationToken)")
+                return NFCSpaceDestinationDTO(
+                    spaceId: 11,
+                    familyId: 3,
+                    spaceName: "玄关柜"
+                )
+            },
+            reloadFamilies: { authenticationToken in
+                events.append("families:\(authenticationToken)")
+                return [FamilyDTO(id: 3, name: "我的家", role: "owner")]
+            },
+            updateFamilies: { families in
+                events.append("update-families")
+                loadedFamilies = families
+            },
+            sync: { familyId, authenticationToken in
+                events.append("sync:\(familyId):\(authenticationToken)")
+                return true
+            },
+            targetIsReady: { spaceId, familyId in
+                events.append("ready:\(familyId):\(spaceId)")
+                return true
+            },
+            navigate: { decision in
+                events.append("navigate:\(decision.familyId):\(decision.spaceId)")
+                navigation = decision
+            }
+        )
+
+        XCTAssertEqual(loadedFamilies.map(\.id), [3])
+        XCTAssertEqual(navigation, NFCNavigationDecision(familyId: 3, spaceId: 11))
+        XCTAssertNil(restored.pendingToken)
+        XCTAssertEqual(
+            events,
+            [
+                "resolve:persisted-token:authenticated-session",
+                "families:authenticated-session",
+                "update-families",
+                "sync:3:authenticated-session",
+                "ready:3:11",
+                "navigate:3:11"
+            ]
+        )
+        defaults.removePersistentDomain(forName: suite)
+    }
+
     func testNfcDestinationOnlyNavigatesInsideLoadedMemberships() {
         let target = NFCSpaceDestinationDTO(
             spaceId: 11,
@@ -65,6 +132,16 @@ final class NFCDeepLinkRouterTests: XCTestCase {
     }
 
     func testNfcResolutionFailureUsesStatusSpecificCopyAndTokenPolicy() {
+        let unauthorized = nfcResolutionFailureDecision(
+            for: APIError.server(statusCode: 401, message: "Unauthenticated")
+        )
+        XCTAssertEqual(
+            unauthorized,
+            .reauthenticate(message: "登录状态已失效，请重新登录后继续。")
+        )
+        XCTAssertFalse(unauthorized.consumesToken)
+        XCTAssertTrue(unauthorized.requiresAuthentication)
+
         XCTAssertEqual(
             nfcResolutionFailureDecision(
                 for: APIError.server(statusCode: 403, message: "server copy")
@@ -81,7 +158,11 @@ final class NFCDeepLinkRouterTests: XCTestCase {
             nfcResolutionFailureDecision(
                 for: APIError.server(statusCode: 500, message: "服务暂时不可用")
             ),
-            .discardToken(message: "服务暂时不可用")
+            .retry(message: "服务暂时不可用")
+        )
+        XCTAssertEqual(
+            nfcResolutionFailureDecision(for: APIError.invalidResponse),
+            .retry(message: "服务器响应无效")
         )
         XCTAssertEqual(
             nfcResolutionFailureDecision(for: URLError(.notConnectedToInternet)),
