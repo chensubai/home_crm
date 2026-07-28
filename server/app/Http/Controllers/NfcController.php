@@ -27,7 +27,7 @@ class NfcController extends Controller
                     'appIDs' => [$appId],
                     'components' => [[
                         '/' => '/nfc/*',
-                        'comment' => '运营小家 NFC 空间链接',
+                        'comment' => '方寸 NFC 空间链接',
                     ]],
                 ]],
             ],

@@ -56,7 +56,7 @@ struct LoginView: View {
                         Button {
                             Task { await login() }
                         } label: {
-                            Label("进入运营小家", systemImage: "arrow.right")
+                            Label("进入方寸", systemImage: "arrow.right")
                                 .labelStyle(.titleAndIcon)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
@@ -101,7 +101,7 @@ struct LoginView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("运营小家")
+                Text("方寸")
                     .font(.system(size: 38, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.16))
                 Text("把柜子、抽屉和日常提醒放进一个清爽的家庭空间。")

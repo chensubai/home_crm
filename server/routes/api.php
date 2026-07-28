@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => [
     'ok' => true,
-    'name' => '运营小家 API',
+    'name' => '方寸 API',
 ]);
 
 Route::post('/auth/sms/send', [AuthController::class, 'sendSms']);

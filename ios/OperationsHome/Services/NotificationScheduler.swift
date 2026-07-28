@@ -25,7 +25,7 @@ struct NotificationScheduler {
         await cancel(reminderId: reminder.remoteId)
 
         let content = UNMutableNotificationContent()
-        content.title = "运营小家"
+        content.title = "方寸"
         content.body = reminder.title
         content.sound = .default
 
