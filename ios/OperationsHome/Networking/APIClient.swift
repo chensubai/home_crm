@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class SessionStore: ObservableObject {
     private let defaults: UserDefaults
+    private let lastAuthenticatedUserIdKey = "lastAuthenticatedUserId"
 
     @Published var token: String? {
         didSet {
@@ -19,6 +20,7 @@ final class SessionStore: ObservableObject {
         didSet {
             if let user, let data = try? JSONEncoder().encode(user) {
                 defaults.set(data, forKey: "currentUser")
+                defaults.set(user.id, forKey: lastAuthenticatedUserIdKey)
             } else {
                 defaults.removeObject(forKey: "currentUser")
             }
@@ -52,6 +54,18 @@ final class SessionStore: ObservableObject {
         guard let token,
               let refreshedUser = try? await APIClient(token: token).me() else { return }
         user = refreshedUser
+    }
+
+    func clearLocalSessionState() {
+        selectedFamilyId = nil
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("syncCursor.") {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    var lastAuthenticatedUserId: Int? {
+        let value = defaults.integer(forKey: lastAuthenticatedUserIdKey)
+        return value == 0 ? nil : value
     }
 }
 

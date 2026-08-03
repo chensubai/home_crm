@@ -10,7 +10,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if session.token == nil {
-                LoginView(session: session)
+                LoginView(session: session, context: context)
             } else {
                 HomeView(session: session, sync: sync, router: router)
             }

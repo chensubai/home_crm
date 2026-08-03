@@ -8,9 +8,9 @@ settings:
     SWIFT_VERSION: "5.10"
   configs:
     Debug:
-      API_BASE_URL: "https://api.homecrm.store/api"
+      API_BASE_URL: "http://127.0.0.1:8080/api"
     Release:
-      API_BASE_URL: "https://api.homecrm.store/api"
+      API_BASE_URL: "http://127.0.0.1:8080/api"
 targets:
   OperationsHome:
     type: application

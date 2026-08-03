@@ -1,6 +1,24 @@
 import Foundation
 import SwiftData
 
+enum LocalDataStore {
+    static func clear(context: ModelContext) {
+        deleteAll(FamilyRecord.self, from: context)
+        deleteAll(FamilyMemberRecord.self, from: context)
+        deleteAll(SpaceRecord.self, from: context)
+        deleteAll(ItemRecord.self, from: context)
+        deleteAll(ReminderRecord.self, from: context)
+        deleteAll(PendingChange.self, from: context)
+
+        try? context.save()
+    }
+
+    private static func deleteAll<T: PersistentModel>(_ type: T.Type, from context: ModelContext) {
+        guard let records = try? context.fetch(FetchDescriptor<T>()) else { return }
+        records.forEach(context.delete)
+    }
+}
+
 enum ItemStatus: String, Codable, CaseIterable, Identifiable {
     case inUse = "in_use"
     case idle

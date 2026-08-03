@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct LoginView: View {
     @ObservedObject var session: SessionStore
+    let context: ModelContext
     @State private var phone = ""
     @State private var code = ""
     @State private var name = ""
@@ -124,6 +126,10 @@ struct LoginView: View {
     private func login() async {
         do {
             let response = try await APIClient().verifySms(phone: phone, code: code, name: name.isEmpty ? nil : name)
+            if session.lastAuthenticatedUserId != response.user.id {
+                LocalDataStore.clear(context: context)
+                session.clearLocalSessionState()
+            }
             session.token = response.token
             session.user = response.user
         } catch {
