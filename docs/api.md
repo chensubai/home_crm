@@ -28,7 +28,13 @@
   - 普通请求字段：`name`。
   - 上传头像时使用 `multipart/form-data`，字段：`name`, `avatar`。
   - 图片服务端上限为 10 MB；iOS 上传前会压缩到 5 MB 以内。
-  - 私有七牛云空间返回的 `avatar_url` 是带有效期签名的读取地址。
+- 私有七牛云空间返回的 `avatar_url` 是带有效期签名的读取地址。
+
+## 意见反馈
+
+- `POST /api/feedback`
+  - body: `{ "content": "希望增加反馈入口" }`
+  - 返回创建的反馈记录，状态默认为 `pending`。
 
 ## 家庭
 

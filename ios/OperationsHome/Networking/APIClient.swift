@@ -151,6 +151,14 @@ struct APIClient {
         return try await request("profile", method: "PATCH", body: ProfileUpdateRequest(name: name))
     }
 
+    func submitFeedback(content: String) async throws {
+        try await requestVoid(
+            "feedback",
+            method: "POST",
+            body: FeedbackRequest(content: content)
+        )
+    }
+
     func families() async throws -> [FamilyDTO] {
         try await request("families")
     }
@@ -446,7 +454,7 @@ func apiError(statusCode: Int, data: Data) -> APIError {
     return .server(statusCode: statusCode, message: message)
 }
 
-private enum DateParser {
+enum DateParser {
     private static let iso8601 = ISO8601DateFormatter()
 
     private static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
@@ -459,7 +467,10 @@ private enum DateParser {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // Legacy API responses omit an offset. Treat those values as the
+        // user's local wall-clock time instead of silently interpreting them
+        // as UTC.
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
@@ -469,6 +480,13 @@ private enum DateParser {
             ?? iso8601WithFractionalSeconds.date(from: value)
             ?? mysqlDateTime.date(from: value)
     }
+
+    static let localISO8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withTimeZone]
+        formatter.timeZone = .current
+        return formatter
+    }()
 }
 
 private extension String {
@@ -535,6 +553,10 @@ private struct ProfileUpdateRequest: Encodable {
     let name: String
 }
 
+private struct FeedbackRequest: Encodable {
+    let content: String
+}
+
 private struct ItemAdjustRequest: Encodable {
     let delta: Int
     let reason: String?
@@ -552,7 +574,7 @@ enum EncodableValue: Encodable {
         switch self {
         case .int(let value): try container.encode(value)
         case .string(let value): try container.encode(value)
-        case .date(let value): try container.encode(value)
+        case .date(let value): try container.encode(DateParser.localISO8601.string(from: value))
         case .bool(let value): try container.encode(value)
         case .null: try container.encodeNil()
         }
@@ -562,7 +584,7 @@ enum EncodableValue: Encodable {
         switch self {
         case .int(let value): String(value)
         case .string(let value): value
-        case .date(let value): ISO8601DateFormatter().string(from: value)
+        case .date(let value): DateParser.localISO8601.string(from: value)
         case .bool(let value): value ? "1" : "0"
         case .null: ""
         }

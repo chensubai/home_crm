@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FamilyController;
+use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\NfcController;
 use App\Http\Controllers\ProfileController;
@@ -22,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [ProfileController::class, 'show']);
     Route::patch('/profile', [ProfileController::class, 'update']);
+    Route::post('/feedback', [FeedbackController::class, 'store']);
 
     Route::get('/families', [FamilyController::class, 'index']);
     Route::post('/families', [FamilyController::class, 'store']);

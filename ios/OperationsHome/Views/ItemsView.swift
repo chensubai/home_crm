@@ -1,6 +1,16 @@
 import SwiftData
 import SwiftUI
 
+private let itemCategoryOptions = [
+    "食品饮料", "日用品", "清洁用品", "厨房用品", "药品保健",
+    "个人护理", "衣物鞋帽", "数码电器", "文具办公", "宠物用品", "其他"
+]
+
+private let itemUnitOptions = [
+    "个", "件", "盒", "包", "袋", "瓶", "罐", "桶", "箱", "卷",
+    "套", "只", "双", "台", "份", "斤", "克", "千克", "毫升", "升", "其他"
+]
+
 struct ItemAdjustmentGate {
     private var itemIds: Set<Int> = []
 
@@ -395,6 +405,7 @@ struct ItemFormView: View {
     @State private var showingScanner = false
     @State private var imageData: Data?
     @State private var message = ""
+    @State private var isSubmitting = false
 
     init(session: SessionStore, sync: SyncEngine, initialSpaceId: Int? = nil, item: ItemRecord? = nil) {
         self._session = ObservedObject(wrappedValue: session)
@@ -440,11 +451,11 @@ struct ItemFormView: View {
 
                             Divider()
 
-                            ItemFormTextRow(
+                            ItemFormPickerRow(
                                 title: "分类",
-                                placeholder: "例如：日用品",
                                 text: $category,
-                                systemImage: "folder"
+                                systemImage: "folder",
+                                options: itemCategoryOptions
                             )
                         }
 
@@ -505,11 +516,11 @@ struct ItemFormView: View {
 
                             Divider()
 
-                            ItemFormTextRow(
+                            ItemFormPickerRow(
                                 title: "单位",
-                                placeholder: "例如：个、包、瓶",
                                 text: $unit,
-                                systemImage: "scalemass"
+                                systemImage: "scalemass",
+                                options: itemUnitOptions
                             )
                         }
 
@@ -593,24 +604,42 @@ struct ItemFormView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
+                        guard !isSubmitting else { return }
+                        isSubmitting = true
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                        }
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("取消")
+                    .disabled(isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        guard !isSubmitting else { return }
+                        isSubmitting = true
                         Task { await save() }
                     } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                        }
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("保存")
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil || selectedSpaceId == nil)
+                    .disabled(
+                        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || session.selectedFamilyId == nil
+                            || selectedSpaceId == nil
+                            || isSubmitting
+                    )
                 }
             }
             .sheet(isPresented: $showingScanner) {
@@ -641,7 +670,12 @@ struct ItemFormView: View {
     }
 
     private func save() async {
-        guard let token = session.token, let familyId = session.selectedFamilyId, let selectedSpaceId else { return }
+        guard let token = session.token, let familyId = session.selectedFamilyId, let selectedSpaceId else {
+            isSubmitting = false
+            return
+        }
+        defer { isSubmitting = false }
+
         var payload: [String: EncodableValue] = [
             "family_id": .int(familyId),
             "space_id": .int(selectedSpaceId),
@@ -696,6 +730,37 @@ private struct ItemFormTextRow: View {
                     .autocorrectionDisabled()
                     .font(.body.weight(.medium))
             }
+        }
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+    }
+}
+
+private struct ItemFormPickerRow: View {
+    var title: String
+    @Binding var text: String
+    var systemImage: String
+    var options: [String]
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color(red: 0.50, green: 0.59, blue: 0.48))
+                .frame(width: 26)
+
+            Text(title)
+                .font(.body.weight(.medium))
+
+            Spacer()
+
+            Picker(title, selection: $text) {
+                Text("请选择").tag("")
+                ForEach(options, id: \.self) { option in
+                    Text(option).tag(option)
+                }
+            }
+            .labelsHidden()
+            .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
         }
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     }

@@ -114,6 +114,16 @@ final class APIModelsTests: XCTestCase {
         XCTAssertNil(releaseClient.baseURL)
     }
 
+    func testLegacyReminderDateKeepsLocalWallClockTime() {
+        guard let date = DateParser.parse("1970-01-01 10:01:00") else {
+            return XCTFail("Expected legacy date to parse")
+        }
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+
+        XCTAssertEqual(components.hour, 10)
+        XCTAssertEqual(components.minute, 1)
+    }
+
     func testMissingReleaseApiBaseURLFailsWithActionableMessage() async {
         let client = APIClient(
             infoDictionary: [:],

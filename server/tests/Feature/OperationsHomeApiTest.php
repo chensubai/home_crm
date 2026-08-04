@@ -18,6 +18,24 @@ class OperationsHomeApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_authenticated_user_can_submit_feedback(): void
+    {
+        [$user, $token] = $this->login('13800000005');
+
+        $this->withToken($token)
+            ->postJson('/api/feedback', ['content' => '希望增加反馈入口'])
+            ->assertCreated()
+            ->assertJsonPath('data.user_id', $user->id)
+            ->assertJsonPath('data.content', '希望增加反馈入口')
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('feedback', [
+            'user_id' => $user->id,
+            'content' => '希望增加反馈入口',
+            'status' => 'pending',
+        ]);
+    }
+
     public function test_sms_login_creates_user_and_token(): void
     {
         $this->postJson('/api/auth/sms/send', ['phone' => '13800000001'])

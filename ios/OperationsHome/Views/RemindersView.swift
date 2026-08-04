@@ -178,23 +178,19 @@ private struct AlarmReminderRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            Button(action: onEdit) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(time)
-                        .font(.system(size: 40, weight: .light, design: .rounded))
-                        .foregroundStyle(isEnabled ? Color(red: 0.16, green: 0.18, blue: 0.16) : .secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(time)
+                    .font(.system(size: 40, weight: .light, design: .rounded))
+                    .foregroundStyle(isEnabled ? Color(red: 0.16, green: 0.18, blue: 0.16) : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
 
-                    Text(subtitle)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(subtitle)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("编辑提醒 \(subtitle)")
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Toggle("", isOn: Binding(get: { isEnabled }, set: onToggle))
                 .labelsHidden()
@@ -209,6 +205,10 @@ private struct AlarmReminderRow: View {
                 .stroke(Color.white.opacity(0.70), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture(perform: onEdit)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("编辑提醒 \(subtitle)")
     }
 }
 
@@ -250,6 +250,7 @@ struct ReminderFormView: View {
     @State private var monthlyDay: Int
     @State private var notes: String
     @State private var message = ""
+    @State private var isSubmitting = false
     private let scheduler = NotificationScheduler()
 
     init(session: SessionStore, sync: SyncEngine, reminder: ReminderRecord? = nil) {
@@ -391,24 +392,41 @@ struct ReminderFormView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
+                        guard !isSubmitting else { return }
+                        isSubmitting = true
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                        }
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("取消")
+                    .disabled(isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        guard !isSubmitting else { return }
+                        isSubmitting = true
                         Task { await save() }
                     } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                        }
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("保存")
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.selectedFamilyId == nil)
+                    .disabled(
+                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || session.selectedFamilyId == nil
+                            || isSubmitting
+                    )
                 }
             }
         }
@@ -418,7 +436,12 @@ struct ReminderFormView: View {
     }
 
     private func save() async {
-        guard let token = session.token, let familyId = session.selectedFamilyId else { return }
+        guard let token = session.token, let familyId = session.selectedFamilyId else {
+            isSubmitting = false
+            return
+        }
+        defer { isSubmitting = false }
+
         var payload: [String: EncodableValue] = [
             "family_id": .int(familyId),
             "title": .string(title),

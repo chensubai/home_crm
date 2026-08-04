@@ -5,6 +5,7 @@ struct ProfileView: View {
     var family: FamilyDTO?
     var onFamilyUpdated: () async -> Void
     @State private var isEditingProfile = false
+    @State private var isSubmittingFeedback = false
 
     var body: some View {
         NavigationStack {
@@ -79,6 +80,17 @@ struct ProfileView: View {
                             }
                         }
 
+                        Button {
+                            isSubmittingFeedback = true
+                        } label: {
+                            ProfileActionRow(
+                                icon: "bubble.left.and.bubble.right",
+                                title: "意见反馈",
+                                subtitle: "告诉我们你的建议或遇到的问题"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
                         Button(role: .destructive) {
                             session.token = nil
                         } label: {
@@ -109,6 +121,9 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isEditingProfile) {
                 ProfileEditView(session: session)
+            }
+            .sheet(isPresented: $isSubmittingFeedback) {
+                FeedbackView(session: session)
             }
         }
     }
@@ -197,6 +212,92 @@ struct ProfileView: View {
     private var avatarText: String {
         let name = session.user?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return name.first.map(String.init) ?? "家"
+    }
+}
+
+private struct FeedbackView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var session: SessionStore
+    @State private var content = ""
+    @State private var isSubmitting = false
+    @State private var message = ""
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                OnboardingBackground()
+
+                VStack(alignment: .leading, spacing: 20) {
+                    FormHeaderView(
+                        title: "意见反馈",
+                        subtitle: "欢迎告诉我们你的建议或遇到的问题。",
+                        systemImage: "bubble.left.and.bubble.right"
+                    )
+
+                    GlassSection(title: "反馈内容") {
+                        TextEditor(text: $content)
+                            .frame(minHeight: 180)
+                            .scrollContentBackground(.hidden)
+                            .overlay(alignment: .topLeading) {
+                                if content.isEmpty {
+                                    Text("请输入反馈内容")
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 8)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                    }
+
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+
+                    Spacer()
+                }
+                .padding(20)
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                        .disabled(isSubmitting)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        guard !isSubmitting else { return }
+                        isSubmitting = true
+                        Task { await submit() }
+                    } label: {
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Text("提交")
+                        }
+                    }
+                    .disabled(content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+                }
+            }
+        }
+    }
+
+    private func submit() async {
+        guard let token = session.token else {
+            isSubmitting = false
+            return
+        }
+
+        do {
+            try await APIClient(token: token).submitFeedback(
+                content: content.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+            isSubmitting = false
+        }
     }
 }
 
