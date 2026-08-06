@@ -8,8 +8,9 @@ FROM php:8.4-fpm-alpine
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN apk add --no-cache oniguruma-dev sqlite-dev \
-    && docker-php-ext-install mbstring pdo_mysql pdo_sqlite
+RUN apk add --no-cache oniguruma-dev sqlite-dev libjpeg-turbo-dev libpng-dev freetype-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd mbstring pdo_mysql pdo_sqlite
 
 WORKDIR /var/www/html
 COPY --from=vendor /app/vendor ./vendor
