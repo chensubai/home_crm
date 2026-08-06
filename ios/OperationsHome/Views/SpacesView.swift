@@ -141,6 +141,7 @@ struct SpacesView: View {
     @Query private var allItems: [ItemRecord]
     @State private var path: [Int] = []
     @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
     @State private var isAdding = false
     @State private var editingSpace: SpaceRecord?
     @State private var deletingSpace: SpaceRecord?
@@ -197,7 +198,11 @@ struct SpacesView: View {
                             .accessibilityLabel("添加空间")
                         }
 
-                        SearchField(text: $searchText, placeholder: "搜索物品")
+                        SearchField(
+                            text: $searchText,
+                            placeholder: "搜索物品",
+                            isFocused: $isSearchFocused
+                        )
 
                         if spaces.isEmpty {
                             EmptyStateView(
@@ -244,6 +249,11 @@ struct SpacesView: View {
                     .padding(.top, 18)
                     .padding(.bottom, 28)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isSearchFocused = false
+                }
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
@@ -400,6 +410,7 @@ private struct CompactSpaceActions: View {
 private struct SearchField: View {
     @Binding var text: String
     var placeholder: String
+    @FocusState.Binding var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -409,6 +420,7 @@ private struct SearchField: View {
             TextField(placeholder, text: $text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .focused($isFocused)
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -428,6 +440,9 @@ private struct SearchField: View {
                 .stroke(Color.white.opacity(0.72), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.05), radius: 16, y: 10)
+        .onTapGesture {
+            isFocused = true
+        }
     }
 }
 
