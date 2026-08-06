@@ -2,7 +2,7 @@ FROM composer:2 AS vendor
 
 WORKDIR /app
 COPY composer.json composer.lock* ./
-RUN composer install --no-interaction --prefer-dist --no-scripts
+RUN composer install --no-interaction --prefer-dist --no-scripts --no-dev --optimize-autoloader
 
 FROM php:8.4-fpm-alpine
 
