@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\ItemChange;
 use App\Models\StorageSpace;
 use App\Services\QiniuStorage;
+use App\Services\ItemExpiryReminder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -26,7 +27,7 @@ class ItemController extends Controller
         ));
     }
 
-    public function store(Request $request, QiniuStorage $storage)
+    public function store(Request $request, QiniuStorage $storage, ItemExpiryReminder $expiryReminder)
     {
         $data = $request->validate($this->rules(['family_id', 'space_id', 'name', 'quantity']));
         $this->authorizeFamily($request->user(), (int) $data['family_id']);
@@ -37,10 +38,12 @@ class ItemController extends Controller
             return $this->qiniuFailed($exception);
         }
 
-        return $this->ok($this->withImageUrl(Item::create($data), $storage), 201);
+        $item = Item::create($data);
+        $expiryReminder->sync($item);
+        return $this->ok($this->withImageUrl($item, $storage), 201);
     }
 
-    public function update(Request $request, Item $item, QiniuStorage $storage)
+    public function update(Request $request, Item $item, QiniuStorage $storage, ItemExpiryReminder $expiryReminder)
     {
         $this->authorizeFamily($request->user(), $item->family_id);
         $data = $request->validate($this->rules([], true));
@@ -53,14 +56,16 @@ class ItemController extends Controller
             return $this->qiniuFailed($exception);
         }
         $item->update($data);
+        $expiryReminder->sync($item->fresh());
 
         return $this->ok($this->withImageUrl($item->fresh(), $storage));
     }
 
-    public function destroy(Request $request, Item $item)
+    public function destroy(Request $request, Item $item, ItemExpiryReminder $expiryReminder)
     {
         $this->authorizeFamily($request->user(), $item->family_id);
         $item->delete();
+        $expiryReminder->sync($item);
 
         return $this->ok();
     }

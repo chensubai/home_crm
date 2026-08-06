@@ -27,6 +27,7 @@ func inviteCodeForSubmission(_ value: String) -> String? {
 
 struct HomeView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var session: SessionStore
     @ObservedObject var sync: SyncEngine
     @ObservedObject var router: NFCDeepLinkRouter
@@ -114,6 +115,10 @@ struct HomeView: View {
             }
             await resolvePendingNfcLink()
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, didLoadFamiliesSuccessfully else { return }
+            Task { await loadFamilies() }
+        }
         .alert(
             "NFC 贴纸",
             isPresented: Binding(
@@ -164,6 +169,7 @@ struct HomeView: View {
                     ForEach(families) { family in
                         Button(family.name) {
                             session.selectedFamilyId = family.id
+                            Task { await refresh() }
                         }
                     }
                 } label: {

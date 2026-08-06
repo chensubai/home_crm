@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\Reminder;
 use App\Models\StorageSpace;
 use App\Services\QiniuStorage;
+use App\Services\ItemExpiryReminder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -39,7 +40,7 @@ class SyncController extends Controller
         ]);
     }
 
-    public function push(Request $request)
+    public function push(Request $request, ItemExpiryReminder $expiryReminder)
     {
         $data = $request->validate([
             'family_id' => ['required', 'integer', 'exists:families,id'],
@@ -53,9 +54,9 @@ class SyncController extends Controller
         $familyId = (int) $data['family_id'];
         $this->authorizeFamily($request->user(), $familyId);
 
-        DB::transaction(function () use ($data, $familyId): void {
+        DB::transaction(function () use ($data, $familyId, $expiryReminder): void {
             foreach ($data['spaces'] ?? [] as $index => $space) {
-                $this->syncRecord(
+                $syncedItem = $this->syncRecord(
                     StorageSpace::class,
                     $familyId,
                     $space,
@@ -91,6 +92,7 @@ class SyncController extends Controller
                     ['space_id', 'name', 'category', 'quantity', 'unit', 'barcode', 'expires_at', 'status', 'notes', 'image_key', 'image_url', 'image_hash', 'deleted_at', 'updated_at'],
                     "items.{$index}.id"
                 );
+                $expiryReminder->sync($syncedItem);
             }
 
             foreach ($data['reminders'] ?? [] as $index => $reminder) {
@@ -98,7 +100,7 @@ class SyncController extends Controller
                     Reminder::class,
                     $familyId,
                     $reminder,
-                    ['assignee_id', 'title', 'kind', 'remind_at', 'repeat_rule', 'repeat_value', 'is_enabled', 'notes', 'completed_at', 'deleted_at', 'updated_at'],
+                    ['item_id', 'assignee_id', 'title', 'kind', 'remind_at', 'repeat_rule', 'repeat_value', 'is_enabled', 'notes', 'completed_at', 'deleted_at', 'updated_at'],
                     "reminders.{$index}.id"
                 );
             }
@@ -107,7 +109,7 @@ class SyncController extends Controller
         return $this->pull($request, app(QiniuStorage::class));
     }
 
-    private function syncRecord(string $modelClass, int $familyId, array $payload, array $fields, string $idField): void
+    private function syncRecord(string $modelClass, int $familyId, array $payload, array $fields, string $idField): object
     {
         if (isset($payload['id'])) {
             $record = $modelClass::withTrashed()
@@ -127,6 +129,7 @@ class SyncController extends Controller
         $attributes = collect($payload)->only($fields)->all();
         $attributes['family_id'] = $familyId;
         $record->forceFill($attributes)->save();
+        return $record;
     }
 
     private function withImageUrl(StorageSpace|Item $record, QiniuStorage $storage): StorageSpace|Item

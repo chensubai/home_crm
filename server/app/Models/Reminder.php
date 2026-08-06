@@ -17,6 +17,7 @@ class Reminder extends Model
 
     protected $fillable = [
         'family_id',
+        'item_id',
         'assignee_id',
         'title',
         'kind',
@@ -30,6 +31,7 @@ class Reminder extends Model
 
     protected $casts = [
         'family_id' => 'integer',
+        'item_id' => 'integer',
         'assignee_id' => 'integer',
         'remind_at' => 'datetime',
         'is_enabled' => 'boolean',
