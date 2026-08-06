@@ -42,14 +42,20 @@ struct NotificationScheduler {
         guard reminder.repeatRule != .none || reminder.remindAt > .now else { return [] }
 
         let calendar = Calendar.current
-        let time = calendar.dateComponents([.hour, .minute], from: reminder.remindAt)
+        let leadTime: DateComponents = reminder.kind == .itemExpiry
+            ? DateComponents(day: -2)
+            : DateComponents(minute: -30)
+        guard let notificationDate = calendar.date(byAdding: leadTime, to: reminder.remindAt) else { return [] }
+        if reminder.repeatRule == .none && notificationDate <= .now { return [] }
+
+        let time = calendar.dateComponents([.hour, .minute], from: notificationDate)
         let baseIdentifier = "reminder-\(reminder.remoteId)"
 
         switch reminder.repeatRule {
         case .none:
             return [NotificationSchedule(
                 identifier: baseIdentifier,
-                components: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminder.remindAt),
+                components: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: notificationDate),
                 repeats: false
             )]
         case .daily:
@@ -76,7 +82,7 @@ struct NotificationScheduler {
         case .yearly:
             return [NotificationSchedule(
                 identifier: baseIdentifier,
-                components: calendar.dateComponents([.month, .day, .hour, .minute], from: reminder.remindAt),
+                components: calendar.dateComponents([.month, .day, .hour, .minute], from: notificationDate),
                 repeats: true
             )]
         }

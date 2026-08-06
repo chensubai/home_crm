@@ -1,5 +1,15 @@
 # 部署说明
 
+## 提醒 Scheduler
+
+生产环境需要配置系统 cron，每分钟执行一次 Laravel Scheduler：
+
+```cron
+* * * * * cd /path/to/server && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Laravel Scheduler 每小时运行 `reminders:reconcile-notifications`，用于校正有效提醒；实际提醒弹窗由 iOS 本地通知负责。用户必须允许通知权限。
+
 ## iOS API 地址
 
 `APIClient()` 从 Info.plist 的 `APIBaseURL` 读取服务地址，该值由
