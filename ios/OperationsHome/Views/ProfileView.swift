@@ -176,7 +176,7 @@ struct ProfileView: View {
     }
 
     private var avatarURL: URL? {
-        guard let value = session.user?.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let value = (session.user?.avatarThumbnailUrl ?? session.user?.avatarUrl)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !value.isEmpty else { return nil }
         return URL(string: value)
     }

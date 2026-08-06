@@ -11,18 +11,22 @@ final class APIModelsTests: XCTestCase {
     }()
 
     func testDecodesInteractionContractFields() throws {
-        let user = try decoder.decode(UserDTO.self, from: Data(#"{"id":9,"phone":"13800000019","name":"小佳","avatar_key":"users/9/avatar/a.jpg","avatar_url":"https://cdn.example.com/a.jpg","avatar_hash":"avatar-hash"}"#.utf8))
+        let user = try decoder.decode(UserDTO.self, from: Data(#"{"id":9,"phone":"13800000019","name":"小佳","avatar_key":"users/9/avatar/a.jpg","avatar_url":"https://cdn.example.com/a.jpg","avatar_thumbnail_url":"https://cdn.example.com/thumbnail/a.jpg","avatar_hash":"avatar-hash"}"#.utf8))
         let family = try decoder.decode(FamilyDTO.self, from: Data(#"{"id":3,"name":"小佳的家","role":"owner"}"#.utf8))
         let member = try decoder.decode(FamilyMemberDTO.self, from: Data(#"{"id":5,"family_id":3,"user_id":10,"name":"家人","phone":"13800000012","role":"member"}"#.utf8))
         let invite = try decoder.decode(FamilyInviteDTO.self, from: Data(#"{"id":7,"family_id":3,"code":"ABCD1234","phone":null,"expires_at":"2026-07-24T09:00:00Z"}"#.utf8))
-        let space = try decoder.decode(SpaceDTO.self, from: Data(#"{"id":11,"family_id":3,"name":"客厅柜子","nfc_uid":"nfc-updated"}"#.utf8))
+        let space = try decoder.decode(SpaceDTO.self, from: Data(#"{"id":11,"family_id":3,"name":"客厅柜子","nfc_uid":"nfc-updated","thumbnail_url":"https://cdn.example.com/thumbnail/space.jpg"}"#.utf8))
+        let item = try decoder.decode(ItemDTO.self, from: Data(#"{"id":13,"family_id":3,"name":"纸巾","quantity":1,"status":"idle","thumbnail_url":"https://cdn.example.com/thumbnail/item.jpg"}"#.utf8))
         let reminder = try decoder.decode(ReminderDTO.self, from: Data(#"{"id":12,"family_id":3,"title":"缴费","kind":"important_date","remind_at":"2026-07-18T09:00:00Z","repeat_rule":"none","is_enabled":false}"#.utf8))
 
         XCTAssertEqual(user.avatarHash, "avatar-hash")
+        XCTAssertEqual(user.avatarThumbnailUrl, "https://cdn.example.com/thumbnail/a.jpg")
         XCTAssertEqual(family.role, "owner")
         XCTAssertEqual(member.phone, "13800000012")
         XCTAssertEqual(invite.code, "ABCD1234")
         XCTAssertEqual(space.nfcUid, "nfc-updated")
+        XCTAssertEqual(space.thumbnailUrl, "https://cdn.example.com/thumbnail/space.jpg")
+        XCTAssertEqual(item.thumbnailUrl, "https://cdn.example.com/thumbnail/item.jpg")
         XCTAssertFalse(reminder.isEnabled)
     }
 

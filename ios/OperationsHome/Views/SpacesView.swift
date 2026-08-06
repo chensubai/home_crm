@@ -507,7 +507,7 @@ private struct SpaceCardView: View {
     }
 
     private var imageURL: URL? {
-        guard let imageUrl = space.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let imageUrl = (space.thumbnailUrl ?? space.imageUrl)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !imageUrl.isEmpty else {
             return nil
         }
@@ -960,6 +960,7 @@ private func makeSpace(from dto: SpaceDTO) -> SpaceRecord {
         nfcUid: dto.nfcUid,
         imageKey: dto.imageKey,
         imageUrl: dto.imageUrl,
+        thumbnailUrl: dto.thumbnailUrl,
         imageHash: dto.imageHash,
         updatedAt: dto.updatedAt ?? .now,
         deletedAt: dto.deletedAt
@@ -973,6 +974,7 @@ private func apply(_ dto: SpaceDTO, to space: SpaceRecord) {
     space.nfcUid = dto.nfcUid
     space.imageKey = dto.imageKey
     space.imageUrl = dto.imageUrl
+    space.thumbnailUrl = dto.thumbnailUrl
     space.imageHash = dto.imageHash
     space.updatedAt = dto.updatedAt ?? .now
     space.deletedAt = dto.deletedAt

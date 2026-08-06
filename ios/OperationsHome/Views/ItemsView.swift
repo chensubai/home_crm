@@ -298,7 +298,7 @@ struct ItemsView: View {
 
     private func itemImage(_ item: ItemRecord) -> some View {
         ZStack {
-            if let imageUrl = item.imageUrl, let url = URL(string: imageUrl) {
+            if let imageUrl = item.thumbnailUrl ?? item.imageUrl, let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -811,6 +811,7 @@ private func makeItem(from dto: ItemDTO) -> ItemRecord {
         notes: dto.notes,
         imageKey: dto.imageKey,
         imageUrl: dto.imageUrl,
+        thumbnailUrl: dto.thumbnailUrl,
         imageHash: dto.imageHash,
         updatedAt: dto.updatedAt ?? .now,
         deletedAt: dto.deletedAt
@@ -830,6 +831,7 @@ private func apply(_ dto: ItemDTO, to item: ItemRecord) {
     item.notes = dto.notes
     item.imageKey = dto.imageKey
     item.imageUrl = dto.imageUrl
+    item.thumbnailUrl = dto.thumbnailUrl
     item.imageHash = dto.imageHash
     item.updatedAt = dto.updatedAt ?? .now
     item.deletedAt = dto.deletedAt

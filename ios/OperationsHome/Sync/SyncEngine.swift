@@ -50,6 +50,7 @@ final class SyncEngine: ObservableObject {
         record.nfcUid = dto.nfcUid
         record.imageKey = dto.imageKey
         record.imageUrl = dto.imageUrl
+        record.thumbnailUrl = dto.thumbnailUrl
         record.imageHash = dto.imageHash
         record.updatedAt = dto.updatedAt ?? .now
         record.deletedAt = dto.deletedAt
@@ -72,6 +73,7 @@ final class SyncEngine: ObservableObject {
         record.notes = dto.notes
         record.imageKey = dto.imageKey
         record.imageUrl = dto.imageUrl
+        record.thumbnailUrl = dto.thumbnailUrl
         record.imageHash = dto.imageHash
         record.updatedAt = dto.updatedAt ?? .now
         record.deletedAt = dto.deletedAt

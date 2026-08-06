@@ -18,6 +18,7 @@ struct UserDTO: Codable, Identifiable {
     let name: String
     let avatarKey: String?
     let avatarUrl: String?
+    let avatarThumbnailUrl: String?
     let avatarHash: String?
 
     enum CodingKeys: String, CodingKey {
@@ -26,6 +27,7 @@ struct UserDTO: Codable, Identifiable {
         case name
         case avatarKey = "avatar_key"
         case avatarUrl = "avatar_url"
+        case avatarThumbnailUrl = "avatar_thumbnail_url"
         case avatarHash = "avatar_hash"
     }
 }
@@ -78,6 +80,7 @@ struct SpaceDTO: Codable, Identifiable {
     let nfcUid: String?
     let imageKey: String?
     let imageUrl: String?
+    let thumbnailUrl: String?
     let imageHash: String?
     let updatedAt: Date?
     let deletedAt: Date?
@@ -90,6 +93,7 @@ struct SpaceDTO: Codable, Identifiable {
         case nfcUid = "nfc_uid"
         case imageKey = "image_key"
         case imageUrl = "image_url"
+        case thumbnailUrl = "thumbnail_url"
         case imageHash = "image_hash"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
@@ -127,6 +131,7 @@ struct ItemDTO: Codable, Identifiable {
     let notes: String?
     let imageKey: String?
     let imageUrl: String?
+    let thumbnailUrl: String?
     let imageHash: String?
     let updatedAt: Date?
     let deletedAt: Date?
@@ -145,6 +150,7 @@ struct ItemDTO: Codable, Identifiable {
         case notes
         case imageKey = "image_key"
         case imageUrl = "image_url"
+        case thumbnailUrl = "thumbnail_url"
         case imageHash = "image_hash"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"

@@ -17,6 +17,7 @@ final class SessionStoreTests: XCTestCase {
             name: "小佳",
             avatarKey: nil,
             avatarUrl: nil,
+            avatarThumbnailUrl: nil,
             avatarHash: nil
         )
         store = nil
