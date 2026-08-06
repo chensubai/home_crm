@@ -80,6 +80,7 @@ class SpaceController extends Controller
         }
 
         $uploaded = $storage->uploadImage($data['image'], $familyId, $directory);
+        $storage->uploadThumbnail($data['image'], $uploaded['key']);
         unset($data['image']);
 
         return array_merge($data, [
@@ -94,6 +95,7 @@ class SpaceController extends Controller
         $space->loadMissing('nfcTags');
         if ($space->image_key !== null) {
             $space->image_url = $storage->url($space->image_key);
+            $space->setAttribute('thumbnail_url', $storage->thumbnailUrl($space->image_key));
         }
         $space->setAttribute('nfc_uid', $space->nfcTags->first()?->uid);
 

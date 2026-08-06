@@ -27,6 +27,36 @@ class QiniuStorage
         return $this->uploadToKeyPrefix($file, sprintf('users/%d/avatar', $userId));
     }
 
+    public function uploadThumbnail(UploadedFile $file, string $originalKey): void
+    {
+        if (! function_exists('imagecreatefromstring')) {
+            throw new QiniuUploadException(0, '服务器未启用 GD 图片扩展');
+        }
+        $source = imagecreatefromstring((string) file_get_contents((string) $file->getRealPath()));
+        if ($source === false) {
+            throw new QiniuUploadException(0, '无法生成缩略图');
+        }
+        $width = imagesx($source);
+        $height = imagesy($source);
+        $scale = min(1, 480 / max($width, $height));
+        $thumbnail = imagecreatetruecolor((int) round($width * $scale), (int) round($height * $scale));
+        imagecopyresampled($thumbnail, $source, 0, 0, 0, 0, imagesx($thumbnail), imagesy($thumbnail), $width, $height);
+        ob_start(); imagejpeg($thumbnail, null, 78); $data = (string) ob_get_clean();
+        imagedestroy($source); imagedestroy($thumbnail);
+        $key = $this->thumbnailKey($originalKey);
+        [$payload, $error] = (new UploadManager($this->qiniuConfig()))->put(
+            $this->auth()->uploadToken((string) config('services.qiniu.bucket')), $key, $data
+        );
+        if ($error !== null) throw new QiniuUploadException((int) $error->code(), (string) $error->message());
+    }
+
+    public function thumbnailUrl(string $originalKey): string { return $this->url($this->thumbnailKey($originalKey)); }
+
+    private function thumbnailKey(string $originalKey): string
+    {
+        $parts = explode('/', $originalKey); array_splice($parts, -1, 0, 'thumbnail'); return implode('/', $parts);
+    }
+
     private function uploadToKeyPrefix(UploadedFile $file, string $prefix): array
     {
         $this->ensureConfigured();

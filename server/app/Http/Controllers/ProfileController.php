@@ -24,6 +24,7 @@ class ProfileController extends Controller
         if (isset($data['avatar'])) {
             try {
                 $uploaded = $storage->uploadAvatar($data['avatar'], $request->user()->id);
+                $storage->uploadThumbnail($data['avatar'], $uploaded['key']);
             } catch (QiniuUploadException $exception) {
                 return $this->fail(
                     '七牛云头像上传失败，请检查七牛云配置。',
@@ -52,6 +53,7 @@ class ProfileController extends Controller
     {
         if ($user->avatar_key !== null) {
             $user->avatar_url = $storage->url($user->avatar_key);
+            $user->setAttribute('avatar_thumbnail_url', $storage->thumbnailUrl($user->avatar_key));
         }
 
         return $user;

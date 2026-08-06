@@ -122,6 +122,7 @@ class ItemController extends Controller
         }
 
         $uploaded = $storage->uploadImage($data['image'], $familyId, 'items');
+        $storage->uploadThumbnail($data['image'], $uploaded['key']);
         unset($data['image']);
 
         return array_merge($data, [
@@ -149,6 +150,7 @@ class ItemController extends Controller
     {
         if ($item->image_key !== null) {
             $item->image_url = $storage->url($item->image_key);
+            $item->setAttribute('thumbnail_url', $storage->thumbnailUrl($item->image_key));
         }
 
         return $item;
