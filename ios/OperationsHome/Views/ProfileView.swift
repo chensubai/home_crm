@@ -234,8 +234,15 @@ private struct FeedbackView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                        .disabled(isSubmitting)
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                    }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("取消")
+                    .disabled(isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -246,9 +253,12 @@ private struct FeedbackView: View {
                         if isSubmitting {
                             ProgressView()
                         } else {
-                            Text("提交")
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 24, weight: .semibold))
                         }
                     }
+                    .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
+                    .accessibilityLabel("提交")
                     .disabled(content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
                 }
             }
