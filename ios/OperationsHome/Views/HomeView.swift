@@ -99,13 +99,13 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .safeAreaInset(edge: .bottom) {
                     GlassTabBar(selection: $selectedTab, namespace: tabAnimation)
                         .padding(.horizontal, 26)
                         .padding(.top, 8)
                         .padding(.bottom, 8)
                 }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .task(id: router.pendingToken) {
