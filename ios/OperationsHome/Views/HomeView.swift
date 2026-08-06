@@ -99,6 +99,7 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .safeAreaInset(edge: .bottom) {
                     GlassTabBar(selection: $selectedTab, namespace: tabAnimation)
                         .padding(.horizontal, 26)
