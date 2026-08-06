@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import XCTest
 @testable import OperationsHome
 
@@ -30,6 +31,65 @@ final class APIModelsTests: XCTestCase {
             normalizedReminderKind(storedKind: .importantDate, repeatRule: .weekly),
             .periodicTask
         )
+    }
+
+    func testAvatarCompressionProducesJPEGNoLargerThan500KB() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 2400, height: 1800))
+        let source = renderer.image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2400, height: 1800))
+        }
+
+        let data = try XCTUnwrap(AvatarImageProcessor.compressedJPEG(from: source))
+
+        XCTAssertLessThanOrEqual(data.count, 512_000)
+    }
+
+    func testAvatarSquareCropReturnsSquareImage() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 600))
+        let source = renderer.image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 800, height: 600))
+        }
+
+        let cropped = try XCTUnwrap(
+            AvatarImageProcessor.squareCrop(
+                image: source,
+                cropRect: CGRect(x: 100, y: 0, width: 600, height: 600)
+            )
+        )
+
+        XCTAssertEqual(cropped.size.width, cropped.size.height)
+    }
+
+    func testImageCropProcessorProducesConfiguredAspectRatios() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 900))
+        let source = renderer.image { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1200, height: 900))
+        }
+
+        let spaceCrop = try XCTUnwrap(
+            ImageCropProcessor.centerCrop(image: source, aspectRatio: 4 / 3)
+        )
+        let itemCrop = try XCTUnwrap(
+            ImageCropProcessor.centerCrop(image: source, aspectRatio: 1)
+        )
+
+        XCTAssertEqual(spaceCrop.size.width / spaceCrop.size.height, 4 / 3, accuracy: 0.01)
+        XCTAssertEqual(itemCrop.size.width, itemCrop.size.height, accuracy: 0.01)
+    }
+
+    func testImageCropProcessorCompressesWithin500KB() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 2400, height: 1800))
+        let source = renderer.image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2400, height: 1800))
+        }
+
+        let data = try XCTUnwrap(ImageCropProcessor.compressedJPEG(from: source))
+
+        XCTAssertLessThanOrEqual(data.count, 512_000)
     }
 
     func testSpaceWritePayloadsNeverSendNfcUid() throws {

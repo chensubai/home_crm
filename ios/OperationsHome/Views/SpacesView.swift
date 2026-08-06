@@ -438,7 +438,8 @@ private struct SpaceCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             coverImage
-            .frame(height: 118)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(4 / 3, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             VStack(alignment: .leading, spacing: 5) {
@@ -615,6 +616,7 @@ private struct SpaceFormView: View {
     @State private var createdSpaceId: Int?
     @State private var nfcFlow = SpaceNFCFlowState.idle
     @State private var isSaving = false
+    @State private var isUploadingImage = false
     @State private var message = ""
 
     init(session: SessionStore, sync: SyncEngine, space: SpaceRecord? = nil) {
@@ -644,7 +646,15 @@ private struct SpaceFormView: View {
                         }
 
                         GlassSection(title: "空间图片") {
-                            ImageInputView(imageData: $imageData, existingImageURL: existingImageURL)
+                            ImageInputView(
+                                imageData: $imageData,
+                                existingImageURL: existingImageURL,
+                                cropAspect: .space,
+                                isUploading: isUploadingImage,
+                                onImageConfirmed: { imageData in
+                                    Task { await uploadImage(imageData) }
+                                }
+                            )
                         }
 
                         GlassSection(title: "NFC 贴纸") {
@@ -674,7 +684,7 @@ private struct SpaceFormView: View {
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("取消")
-                    .disabled(isSaving || isRequestingNfc)
+                    .disabled(isSaving || isUploadingImage || isRequestingNfc)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -687,6 +697,7 @@ private struct SpaceFormView: View {
                     .accessibilityLabel("保存")
                     .disabled(
                         isSaving
+                            || isUploadingImage
                             || isRequestingNfc
                             || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || session.selectedFamilyId == nil
@@ -873,6 +884,26 @@ private struct SpaceFormView: View {
                 )
             }
             message = ""
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func uploadImage(_ imageData: Data) async {
+        guard let token = session.token, let familyId = session.selectedFamilyId, let currentSpace else { return }
+        isUploadingImage = true
+        message = ""
+        defer { isUploadingImage = false }
+
+        do {
+            let dto = try await APIClient(token: token).updateSpaceImage(
+                id: currentSpace.remoteId,
+                imageData: imageData
+            )
+            apply(dto, to: currentSpace)
+            self.imageData = nil
+            try context.save()
+            await sync.pull(familyId: familyId, token: token, context: context)
         } catch {
             message = error.localizedDescription
         }

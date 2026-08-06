@@ -31,34 +31,6 @@ struct ProfileView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("编辑个人资料")
 
-                        VStack(spacing: 12) {
-                            Button {
-                                isEditingProfile = true
-                            } label: {
-                                ProfileInfoRow(
-                                    icon: "person.fill",
-                                    title: "昵称",
-                                    value: session.user?.name ?? "家庭成员",
-                                    showsChevron: true
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("编辑个人资料")
-
-                            ProfileInfoRow(
-                                icon: "iphone",
-                                title: "手机号",
-                                value: session.user?.phone ?? "已登录"
-                            )
-                        }
-                        .padding(14)
-                        .background(Color.white.opacity(0.84), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(Color.white.opacity(0.70), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.06), radius: 18, y: 10)
-
                         if let family {
                             VStack(spacing: 12) {
                                 familyLink(
@@ -297,36 +269,6 @@ private struct FeedbackView: View {
         } catch {
             message = error.localizedDescription
             isSubmitting = false
-        }
-    }
-}
-
-private struct ProfileInfoRow: View {
-    var icon: String
-    var title: String
-    var value: String
-    var showsChevron = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color(red: 0.30, green: 0.48, blue: 0.36))
-                .frame(width: 38, height: 38)
-                .background(Color(red: 0.86, green: 0.92, blue: 0.78), in: Circle())
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
         }
     }
 }

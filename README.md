@@ -1,4 +1,4 @@
-# 运营小家
+# 方寸
 
 家庭物品管理与生活提醒的 iOS MVP。仓库包含 SwiftUI iOS 客户端、Laravel/MySQL API 服务和产品/API 文档。
 
@@ -15,6 +15,52 @@ API 默认地址是 `http://localhost:8080/api`，直接打开该地址会返回
 首次启动时，API 容器会在 `server/vendor` 不存在时自动执行 `composer install`，所以宿主机目录也会看到 vendor 文件。
 
 服务默认使用 `Asia/Shanghai` 时区和按天日志，日志保留天数由 `LOG_DAILY_DAYS` 配置。七牛云华北-河北区域使用 `QINIU_REGION=z1`；私有空间还需设置 `QINIU_PRIVATE=true`，API 会为头像、空间和物品图片返回限时签名地址。
+
+## 线上启动与重启
+
+生产服务器使用 Docker 运行 `api` 和 `nginx` 两个服务，MySQL 8.4 使用服务器原生安装的实例，不启动 MySQL 镜像。生产代码和配置路径如下：
+
+- Compose：`/etc/homecrm/docker-compose.prod.yml`
+- API 代码：`/www/home_crm/server`
+- 生产环境配置：`/www/home_crm/server/.env`
+
+登录服务器后，首次启动或恢复服务：
+
+```bash
+cd /etc/homecrm
+docker compose -f docker-compose.prod.yml up -d
+```
+
+更新 `/www/home_crm/server/.env` 后，必须重建 API 容器并刷新 Laravel 配置缓存；不要重启 MySQL：
+
+```bash
+cd /etc/homecrm
+docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api
+docker compose -f docker-compose.prod.yml exec -T api php artisan config:clear
+docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache
+```
+
+若本次代码包含新的 Laravel migration，再执行：
+
+```bash
+docker compose -f /etc/homecrm/docker-compose.prod.yml exec -T api php artisan migrate --force
+```
+
+修改 Nginx 配置或 HTTPS 证书后，只重启 Nginx：
+
+```bash
+cd /etc/homecrm
+docker compose -f docker-compose.prod.yml restart nginx
+```
+
+部署后检查容器、数据库连接和线上 API：
+
+```bash
+cd /etc/homecrm
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml exec -T api php artisan migrate:status --no-interaction
+curl --fail --silent --show-error https://api.homecrm.store/api
+```
 
 ## iOS
 

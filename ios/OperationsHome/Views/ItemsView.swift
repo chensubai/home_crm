@@ -406,6 +406,7 @@ struct ItemFormView: View {
     @State private var imageData: Data?
     @State private var message = ""
     @State private var isSubmitting = false
+    @State private var isUploadingImage = false
 
     init(session: SessionStore, sync: SyncEngine, initialSpaceId: Int? = nil, item: ItemRecord? = nil) {
         self._session = ObservedObject(wrappedValue: session)
@@ -585,7 +586,15 @@ struct ItemFormView: View {
                                     .font(.body.weight(.medium))
                             }
 
-                            ImageInputView(imageData: $imageData, existingImageURL: existingImageURL)
+                            ImageInputView(
+                                imageData: $imageData,
+                                existingImageURL: existingImageURL,
+                                cropAspect: .item,
+                                isUploading: isUploadingImage,
+                                onImageConfirmed: { imageData in
+                                    Task { await uploadImage(imageData) }
+                                }
+                            )
                         }
 
                         if !message.isEmpty {
@@ -617,7 +626,7 @@ struct ItemFormView: View {
                     }
                     .tint(Color(red: 0.20, green: 0.32, blue: 0.25))
                     .accessibilityLabel("取消")
-                    .disabled(isSubmitting)
+                    .disabled(isSubmitting || isUploadingImage)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -639,6 +648,7 @@ struct ItemFormView: View {
                             || session.selectedFamilyId == nil
                             || selectedSpaceId == nil
                             || isSubmitting
+                            || isUploadingImage
                     )
                 }
             }
@@ -701,6 +711,26 @@ struct ItemFormView: View {
             try context.save()
             await sync.pull(familyId: familyId, token: token, context: context)
             dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func uploadImage(_ imageData: Data) async {
+        guard let token = session.token, let familyId = session.selectedFamilyId, let item else { return }
+        isUploadingImage = true
+        message = ""
+        defer { isUploadingImage = false }
+
+        do {
+            let dto = try await APIClient(token: token).updateItemImage(
+                id: item.remoteId,
+                imageData: imageData
+            )
+            apply(dto, to: item)
+            self.imageData = nil
+            try context.save()
+            await sync.pull(familyId: familyId, token: token, context: context)
         } catch {
             message = error.localizedDescription
         }

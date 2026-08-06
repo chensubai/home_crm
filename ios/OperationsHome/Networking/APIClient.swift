@@ -137,17 +137,24 @@ struct APIClient {
         try await request("auth/me")
     }
 
-    func updateProfile(name: String, avatarData: Data? = nil) async throws -> UserDTO {
+    func updateProfile(name: String? = nil, avatarData: Data? = nil) async throws -> UserDTO {
         if let avatarData {
+            var fields = ["_method": "PATCH"]
+            if let name {
+                fields["name"] = name
+            }
             return try await requestMultipart(
                 "profile",
                 method: "POST",
-                fields: ["_method": "PATCH", "name": name],
+                fields: fields,
                 fileFieldName: "avatar",
                 imageData: avatarData
             )
         }
 
+        guard let name else {
+            throw APIError.configuration(message: "缺少需要更新的个人资料。")
+        }
         return try await request("profile", method: "PATCH", body: ProfileUpdateRequest(name: name))
     }
 
@@ -236,6 +243,15 @@ struct APIClient {
         )
     }
 
+    func updateSpaceImage(id: Int, imageData: Data) async throws -> SpaceDTO {
+        try await requestMultipart(
+            "spaces/\(id)",
+            method: "POST",
+            fields: ["_method": "PATCH"],
+            imageData: imageData
+        )
+    }
+
     func deleteSpace(id: Int) async throws {
         try await requestVoid("spaces/\(id)", method: "DELETE")
     }
@@ -273,6 +289,15 @@ struct APIClient {
         }
 
         return try await request("items/\(id)", method: "PATCH", body: payload)
+    }
+
+    func updateItemImage(id: Int, imageData: Data) async throws -> ItemDTO {
+        try await requestMultipart(
+            "items/\(id)",
+            method: "POST",
+            fields: ["_method": "PATCH"],
+            imageData: imageData
+        )
     }
 
     func deleteItem(id: Int) async throws {
