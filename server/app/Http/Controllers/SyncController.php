@@ -30,10 +30,14 @@ class SyncController extends Controller
 
         return $this->ok([
             'cursor' => now()->utc()->toJSON(),
-            'spaces' => StorageSpace::withTrashed()->with('nfcTags')->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
+            'spaces' => StorageSpace::withTrashed()->with('nfcTags')->where('family_id', $familyId)->where(function ($query) use ($since) {
+                $query->where('updated_at', '>', $since)->orWhereNotNull('image_key');
+            })->get()->map(
                 fn (StorageSpace $space) => $this->withImageUrl($space, $storage)
             ),
-            'items' => Item::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get()->map(
+            'items' => Item::withTrashed()->where('family_id', $familyId)->where(function ($query) use ($since) {
+                $query->where('updated_at', '>', $since)->orWhereNotNull('image_key');
+            })->get()->map(
                 fn (Item $item) => $this->withImageUrl($item, $storage)
             ),
             'reminders' => Reminder::withTrashed()->where('family_id', $familyId)->where('updated_at', '>', $since)->get(),
@@ -136,6 +140,7 @@ class SyncController extends Controller
     {
         if ($record->image_key !== null) {
             $record->image_url = $storage->url($record->image_key);
+            $record->setAttribute('thumbnail_url', $storage->thumbnailUrl($record->image_key));
         }
         if ($record instanceof StorageSpace) {
             $record->setAttribute('nfc_uid', $record->nfcTags->first()?->uid);
