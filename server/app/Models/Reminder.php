@@ -2,9 +2,7 @@
 
 namespace App\Models;
 
-use DateTimeInterface;
-use DateTimeZone;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Reminder extends Model
@@ -38,8 +36,4 @@ class Reminder extends Model
         'completed_at' => 'datetime',
     ];
 
-    public function serializeDate(DateTimeInterface $date): string
-    {
-        return $date->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\\TH:i:s.v\\Z');
-    }
 }

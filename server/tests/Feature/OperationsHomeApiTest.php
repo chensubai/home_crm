@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Family;
+use App\Models\Item;
 use App\Models\NfcTag;
 use App\Models\StorageSpace;
 use App\Models\User;
@@ -108,6 +109,63 @@ class OperationsHomeApiTest extends TestCase
             'before_quantity' => 6,
             'after_quantity' => 5,
         ]);
+    }
+
+    public function test_incremental_sync_refreshes_image_urls_for_unchanged_records(): void
+    {
+        $this->app->instance(QiniuStorage::class, new class extends QiniuStorage
+        {
+            public function url(string $key): string
+            {
+                return "https://cdn.example.com/original/{$key}";
+            }
+
+            public function thumbnailUrl(string $key): string
+            {
+                return "https://cdn.example.com/thumbnail/{$key}";
+            }
+        });
+
+        [, $token] = $this->login('13800000053');
+        $familyId = $this->withToken($token)
+            ->postJson('/api/families', ['name' => '图片同步家庭'])
+            ->assertCreated()
+            ->json('data.id');
+        $spaceId = $this->withToken($token)
+            ->postJson('/api/spaces', ['family_id' => $familyId, 'name' => '带图空间'])
+            ->assertCreated()
+            ->json('data.id');
+        $itemId = $this->withToken($token)
+            ->postJson('/api/items', [
+                'family_id' => $familyId,
+                'space_id' => $spaceId,
+                'name' => '带图物品',
+                'quantity' => 1,
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $updatedAt = now()->subHour();
+        StorageSpace::whereKey($spaceId)->update([
+            'image_key' => 'families/1/spaces/space.jpg',
+            'updated_at' => $updatedAt,
+        ]);
+        Item::whereKey($itemId)->update([
+            'image_key' => 'families/1/items/item.jpg',
+            'updated_at' => $updatedAt,
+        ]);
+
+        $since = now()->subMinute()->toIso8601String();
+
+        $this->withToken($token)
+            ->getJson('/api/sync?family_id='.$familyId.'&since='.rawurlencode($since))
+            ->assertOk()
+            ->assertJsonCount(1, 'data.spaces')
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.spaces.0.image_url', 'https://cdn.example.com/original/families/1/spaces/space.jpg')
+            ->assertJsonPath('data.spaces.0.thumbnail_url', 'https://cdn.example.com/thumbnail/families/1/spaces/space.jpg')
+            ->assertJsonPath('data.items.0.image_url', 'https://cdn.example.com/original/families/1/items/item.jpg')
+            ->assertJsonPath('data.items.0.thumbnail_url', 'https://cdn.example.com/thumbnail/families/1/items/item.jpg');
     }
 
     public function test_family_data_is_isolated_between_memberships(): void
