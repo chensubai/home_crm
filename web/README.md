@@ -16,6 +16,22 @@ npm run dev
 npm run build
 ```
 
+## Docker 部署
+
+在 `web/` 目录构建并启动生产容器：
+
+```bash
+docker compose up -d --build
+curl --fail http://127.0.0.1:3000/
+```
+
+容器只绑定服务器本机的 `3000` 端口，外部访问应由 Nginx 反向代理到
+`http://127.0.0.1:3000`。更新官网时重新执行：
+
+```bash
+docker compose up -d --build --force-recreate
+```
+
 This starter does not use `wrangler.jsonc`.
 
 ## Included Shape

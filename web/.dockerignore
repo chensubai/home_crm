@@ -1,0 +1,9 @@
+node_modules
+dist
+.wrangler
+.git
+.gitignore
+*.log
+tests
+examples
+README.md
